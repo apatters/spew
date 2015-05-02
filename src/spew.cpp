@@ -1360,6 +1360,8 @@ void do_job(Job *job, unsigned int iteration, IoDirection_t ioDirection)
 void run(operation_enum operation)
 {
    int ret;
+   u32_t iterationSeed = gSeed;
+   Random rnd(gSeed);
 
    gCurrentIteration = 0;
    do
@@ -1379,7 +1381,7 @@ void run(operation_enum operation)
                                  gUserPattern,
                                  gFillMethod,
                                  gIOMethod,
-                                 gSeed,
+                                 iterationSeed,
                                  gJobId);
          if (job == (Job *)NULL)
          {
@@ -1418,7 +1420,7 @@ void run(operation_enum operation)
                                 gUserPattern,
                                 gFillMethod,
                                 gIOMethod,
-                                gSeed,
+                                iterationSeed,
                                 gJobId);
          if (job == (Job *)NULL)
          {
@@ -1439,6 +1441,7 @@ void run(operation_enum operation)
             gDisplay->nextJob();
          }
       }
+	  iterationSeed = rnd.getRandom32();
 
    } while (gIterationsToDo == 0LLU || gCurrentIteration < gIterationsToDo);
 }

@@ -71,6 +71,7 @@ static const size_t MAX_SPRINTF_CHARS = 2048;
 static const size_t MAX_STR_CHARS = 1024;
 
 
+#if !HAVE_BASENAME
 /////////////////////////  basename()  ///////////////////////////////////////
 const char *basename(char *path)
 {
@@ -80,6 +81,7 @@ const char *basename(char *path)
    else
       return name + 1;
 }
+#endif
 
 
 #ifdef HAVE_MOUNT_CHECK

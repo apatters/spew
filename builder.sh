@@ -8,6 +8,7 @@ Usage: `basename $0` <arch>
 where <arch> is one of:
 
    linux-ia32
+   linux-x86_64
    linux-ia64
    linux-parisc64
    cygwinxp-ia32
@@ -33,6 +34,9 @@ COMPRESS_FLAGS=-c
 
 case $arch in
     linux-ia32)
+      libs="-ldl"
+      ;;
+    linux-x86_64)
       libs="-ldl"
       ;;
     linux-ia64)

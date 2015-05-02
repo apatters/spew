@@ -9,7 +9,7 @@ AM_MAINTAINER_MODE
 
 SPEW_AGE=1
 SPEW_REVISION=0
-SPEW_CURRENT=7
+SPEW_CURRENT=8
 AC_SUBST(SPEW_AGE)
 AC_SUBST(SPEW_REVISION)
 AC_SUBST(SPEW_CURRENT)
@@ -83,7 +83,7 @@ fi
 AC_FUNC_MALLOC
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([getpagesize gettimeofday memset strerror strsignal strrchr localtime_r])
+AC_CHECK_FUNCS([getpagesize gettimeofday memset strerror strsignal strrchr localtime_r basename])
 
 # Add --enable-static
 AC_ARG_ENABLE(static-link,
