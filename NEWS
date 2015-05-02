@@ -1,0 +1,40 @@
+Changes since 1.0.2
+
+* Changed license from Hewlett-Packard proprietary to GPL.  Kudos to 
+  Hewlett-Packard for agreeing to open source this project.
+
+* Don't need to do an initial seek (with the --offset option), since offsets
+  are contained in each transfer.  This fixes a bug when writing to
+  tape drives where seeks are illegal.
+
+Changes since 1.0.1
+
+* Added an FAQ.
+
+* Alphabetically sorted options and parameters in usage and man-pages.
+
+* Added a PATTERNS section to the man-page.  This section will describe the 
+  the various algorithms used for the --pattern option.
+
+* Can now use the tebibytes(t) and terabytes(T) units for
+  the --min-block-size, --max-block-size, --offset options and the the
+  FILE_SIZE parameter.
+
+* I/O error messages are sent to the log file as well as the screen.
+
+* Read and write under-run are no longer treated as errors.  Under-runs
+  are now logged instead.
+
+
+Changes since 1.0.0
+
+* Fixed a segmentation fault when using random block sizes with the --progress
+  option.
+
+* Fixed a memory leak that occurs when --iterations is 0 or greater
+  than 1.
+
+* Updated the documentation.   
+
+
+

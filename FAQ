@@ -1,0 +1,31 @@
+                                Spew FAQ
+                                =============
+
+This is the Spew FAQ.  Any suggestions/corrections/etc should be
+directed to andrew.patterson@hp.com.  The FAQ answers the following questions:
+
+    1) How do I get direct I/O working on RedHat Advanced Server 2.1?
+    2) Who came up with the names "Spew" and "Snarf"?
+
+
+ 1) How do I get direct I/O working on RedHat Advanced Server 2.1?
+
+    RHAS 2.1 has support in the kernel for direct I/O to a block device, but
+    it is not completely enabled.  Applying the following patch will allow 
+    direct I/O to any block device:
+
+--- rhel2.lu3-test/fs/block_dev.c.orig  2004-07-27 16:48:20.000000000 -0600
++++ rhel2.lu3-test/fs/block_dev.c       2004-07-27 16:50:25.000000000 -0600
+@@ -668,6 +668,7 @@
+        sync_page: block_sync_page,
+        prepare_write: blkdev_prepare_write,
+        commit_write: blkdev_commit_write,
++       direct_IO: blkdev_direct_IO,    
+ };
+ 
+ struct file_operations def_blk_fops = {
+
+  2) Who came up with the names "Spew" and "Snarf"?
+
+     Larry Fenske was the author of the original 20-line C version of Spew. 
+     He also originated the names.  

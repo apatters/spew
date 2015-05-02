@@ -1,0 +1,16 @@
+Documentation:
+
+- Finish man pages
+- HTML manual
+- ChangeLog
+
+Porting:
+
+- HP-UX 11.x
+
+Bugs:
+
+- Fix building windows man-pages.
+- Fix linux parisc builder.
+
+
