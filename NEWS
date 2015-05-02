@@ -1,3 +1,31 @@
+Changes since 1.0.5
+
+* Ported to IA-64 HP-UX.
+
+* Joe Eiler contributed a patch that adds new patterns -- ones, zeros, alt, and
+user defined. These patterns are all variations of the zeros
+pattern, but instead 0's, 1's, 0xaa's, or any number between 0 and 255
+are used in the buffer.
+
+* Fixed build problems with GNU/kFreeBSD, which is Debian with a
+  FreeBSD kernel.
+
+* Fixed the following bugs:
+
+  Not all data integrity errors were being logged (They were still
+  being detected, just details were not included in the logfile).
+
+  When using the -c|continue-after-error option, all subsequent
+  transfers after the initial error were reported as errors when using
+  the -P|--progress option.
+
+  Offset into file for reported errors was added twice.
+
+  Data range for integrity errors was reported in the log twice.
+
+  Transfers with data integrity errors were not added to the total
+  data transferred, resulting in attempted reads past the end of file.
+
 Changes since 1.0.4
 
 * Fixed bug in calculating read IOPS.

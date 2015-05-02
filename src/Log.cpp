@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -36,9 +36,9 @@ using namespace std;
 ///////////////////////////////////////////////////////////////////////////////
 ////////////////////////  Local constants  ////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-int TIMESTAMP_STR_LEN = 19;  // Does not includes space for \0.
-char LOGFILE_SEPARATOR_CHAR = '#';
-int LOGFILE_WIDTH = 80;
+const int TIMESTAMP_STR_LEN = 19;  // Does not includes space for \0.
+const char LOGFILE_SEPARATOR_CHAR = '#';
+const int LOGFILE_WIDTH = 80;
 
 
 //////////////////////////  Log::Log()  ///////////////////////////////////////

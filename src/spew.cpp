@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -102,8 +102,11 @@ static const char *PATTERN_LOOKUP[] =
 {
    "none",
    "zeros",
+   "ones",
+   "alt",
    "numbers",
    "random",
+   "#",
    (char *)NULL,
 };
 
@@ -119,13 +122,14 @@ Job::io_method_t gIOMethod = DEFAULT_IO_METHOD;
 TransferInfoList::fill_method_t gFillMethod = DEFAULT_FILL_METHOD;
 Units_t gUnits = DEFAULT_UNITS;
 bool gProgress = false;
-unsigned int gIterationsToDo = 1;
+int gIterationsToDo = 1;
 int gContinueAfterError = 0;
 u32_t gSeed = 0;
 capacity_t gMinBufferSize = DEFAULT_MIN_BUFFER_SIZE;
 capacity_t gMaxBufferSize = DEFAULT_MAX_BUFFER_SIZE;
 capacity_t gOffset = 0;
 Job::pattern_t gPattern = DEFAULT_PATTERN;
+unsigned char gUserPattern = 0;
 capacity_t gTransferSize = 0;
 string gFile = "";
 bool gUseTui = false;
@@ -190,7 +194,7 @@ void note(char *fmt, ...)
 void version()
 {
    note("%s %s\n", CANONICAL_PROG_NAME, PROG_VERSION);
-   note("Copyright 2004 Hewlett-Packard Corp.\n");
+   note("Copyright 2007 Hewlett-Packard Corp.\n");
    note("Written by Andrew Patterson <andrew.patterson@hp.com>\n");
 }
 
@@ -209,7 +213,7 @@ void help(poptContext &context)
 "\n"
 "  FILE                              Regular or device file to write data to.\n"
 "  LOGFILE                           Path to a file used for logging.\n"
-"  MAX_BUFFER_SIZE                   Mimimum buffer size used in each \n"
+"  MAX_BUFFER_SIZE                   Minimum buffer size used in each \n"
 "                                    read(2)/write(2) call (default is\n"
 "                                    MIN_BUFFER_SIZE bytes).\n"
 "                                    MAX_BUFFER_SIZE. Must be an even\n"
@@ -225,7 +229,7 @@ void help(poptContext &context)
 "                                    between the two limits are used.\n"
 "                                    MAX_BUFFER_SIZE must be an even\n"
 "                                    multiple of MIN_BUFFER_SIZE.\n"
-"  MIN_BUFFER_SIZE                   Mimimum buffer size used in each \n"
+"  MIN_BUFFER_SIZE                   Minimum buffer size used in each \n"
 "                                    read(2)/write(2) call (default is\n"
 "                                    %llu bytes).\n"
 "                                    MIN_BUFFER_SIZE. Must be an even\n"
@@ -244,9 +248,10 @@ void help(poptContext &context)
 "                                    gibibytes(g), gigabytes(G).\n"
 "                                    tebibytes(t), or terabytes(T).\n"
 "  PATTERN                           Data pattern used when writing/reading\n"
-"                                    data. Available patterns are: none, \n"
-"                                    zeros, random, and numbers. The default\n"
-"                                    pattern is %s.\n"
+"                                    data. Available patterns are: %s, \n"
+"                                    %s, %s, %s, %s, %s, and \"%s\"\n"
+"                                    (where \"%s\" is a number between 0-255). The\n"
+"                                    default pattern is \"%s\".\n"
 "  RCFILE                            Read additional command-line options\n"
 "                                    from RCFILE.  Other options on the\n"
 "                                    command-line will override options in\n"
@@ -256,8 +261,9 @@ void help(poptContext &context)
 "  TRANSFER_SIZE                     Total number of bytes to transfer (must\n"
 "                                    be an even multiple of both\n"
 "                                    MIN_BUFFER_SIZE and MAX_BUFFER)SIZE).\n"
-"                                    TRANSER_SIZE can be specified in bytes,\n"
-"                                    kilobytes, megabytes, or gigabytes.\n"
+"                                    TRANSFER_SIZE can be specified in\n" 
+"                                    bytes, kilobytes, megabytes, or \n"
+"                                    gigabytes.\n"
 "  UNITS                             Kibibytes(k), kilobytes(K), \n"
 "                                    mebibytes(m), megabytes(M),\n" 
 "                                    gibibytes(g), gigabytes(G).\n"
@@ -272,8 +278,12 @@ void help(poptContext &context)
             Transfer::OFFSET_INCREMENT,
             PATTERN_LOOKUP[Job::PATTERN_NONE],
             PATTERN_LOOKUP[Job::PATTERN_ZEROS],
+            PATTERN_LOOKUP[Job::PATTERN_ONES],
+            PATTERN_LOOKUP[Job::PATTERN_ALTERNATING],
             PATTERN_LOOKUP[Job::PATTERN_RANDOM],
             PATTERN_LOOKUP[Job::PATTERN_TRANSFER_NUMBERS],
+            PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
+				PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
             PATTERN_LOOKUP[DEFAULT_PATTERN]);
    fprintf(stdout, outStr);
 
@@ -477,7 +487,7 @@ bool read_rcfiles(int argc, const char **argv, string& cmdArgs)
       rcFilePath = "";
       if (strncmp(argv[i], "--rcfile", 8) == 0)
       {
-         char *eqPos = strrchr(argv[i], '=');
+         const char *eqPos = strrchr(argv[i], '=');
          if (eqPos == (char *)NULL)
          {
             if (i + 1 < argc)
@@ -541,6 +551,7 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
    int writeArg = 0;
    int readArg = 0;
    int readAfterWriteArg = 0;
+   int seedArg = 0;
    int helpArg = 0;
    int usageArg = 0;
    int iterationsArg = -1;
@@ -567,23 +578,23 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
       {"generate-load", 'g', POPT_ARG_NONE, &generateLoadArg, 0, "Equivalent to: -v -t -P -p random -i 0.",  NULL},
       {"iterations", 'i', POPT_ARG_INT, &iterationsArg, 0, "Write/read data COUNT times. If count is 0, repeats forever.", "COUNT"},
       {"logfile", 'l', POPT_ARG_STRING, &logfilePathArgStr, 0, "Send log messages to LOGFILE.", "LOGFILE"},
-      {"no-progress", 0, POPT_ARG_NONE, &noProgressArg, 0, "Don't show progess (default).", NULL},
+      {"no-progress", 0, POPT_ARG_NONE, &noProgressArg, 0, "Don't show progress (default).", NULL},
       {"no-rcfiles", 0, POPT_ARG_NONE, NULL, 0, "Don't use standard rcfiles.", NULL},
       {"no-statistics", 'q', POPT_ARG_NONE, &noStatisticsArg, 0, "Don't output statistics.", NULL},
       {"no-tui", 0, POPT_ARG_NONE, &noTuiArg, 0, "Don't use TUI interface.", NULL},
       {"offset", 'o', POPT_ARG_STRING, &offsetArgStr, 0, "Seek to OFFSET before starting I/O.", "OFFSET"},
-      {"progress", 'P', POPT_ARG_NONE, &progressArg, 0, "Show progess.", NULL},
+      {"progress", 'P', POPT_ARG_NONE, &progressArg, 0, "Show progress.", NULL},
       {"pattern", 'p', POPT_ARG_STRING, &patternArgStr, 0, "Use data pattern PATTERN when reading or writing data.", "PATTERN"},
       {"random", 'r', POPT_ARG_NONE, &randomArg, 0, "Read/Write buffers to random offsets.", NULL},
       {"raw", 0, POPT_ARG_NONE, &readAfterWriteArg, 0, "An alias for --read-after-write.", NULL},
       {"rcfile", 0, POPT_ARG_STRING, &dummyArgStr, 0, "Read command-line options from RCFILE.", "RCFILE"},
       {"read", 0, POPT_ARG_NONE, &readArg, 0, "Read date from FILE.", NULL},
       {"read-after-write", 0, POPT_ARG_NONE, &readAfterWriteArg, 0, "Read back data after writing to FILE.", NULL},
-      {"seed", 'S', POPT_ARG_LONG, &gSeed, 0, "Use SEED for random number seed.","SEED"},
+      {"seed", 'S', POPT_ARG_INT, &seedArg, 0, "Use SEED for random number seed.","SEED"},
       {"sync", 's', POPT_ARG_NONE, &syncArg, 0, "Use synchronous I/O.", NULL},
       {"statistics", 0, POPT_ARG_NONE, &statisticsArg, 0, "Output statistics (default).", NULL},
       {"tui", 't', POPT_ARG_NONE, &tuiArg, 0, "Use curses-based, terminal user interface.", NULL},
-      {"units", 'u', POPT_ARG_STRING, &unitsArgStr, 0, "Show tranfer rate in UNITS units.", "UNITS"},
+      {"units", 'u', POPT_ARG_STRING, &unitsArgStr, 0, "Show transfer rate in UNITS units.", "UNITS"},
       {"usage", 0, POPT_ARG_NONE, &usageArg, 0, "Show brief usage message and exit.", NULL},
       {"version", 'V', POPT_ARG_NONE, &gGetVersion, 0, "Output version information and exit.", NULL},
       {"detailed-statistics", 'v', POPT_ARG_NONE, &detailedStatisticsArg, 0, "Output detailed statistics.", NULL},
@@ -703,9 +714,25 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
             break;
          }
       }
+		if (!found) // Check for user pattern.
+		{
+			long int userPattern;
+			char *endPtr;
+			errno = 0;
+			userPattern = strtol(patternArgStr, &endPtr, 0);
+			if (errno == 0 && 
+				 *endPtr == '\0' && 
+				 userPattern >= 0 && 
+				 userPattern <= 255)
+			{
+				found = true;
+				gPattern = Job::PATTERN_USER_DEFINED;
+				gUserPattern = (unsigned char)userPattern;
+			}
+		}
       if (!found)
       {
-         error_msg("\"%s\" is not a valid pattern. Use none, zeros, numbers, or random.\n", patternArgStr);
+         error_msg("\"%s\" is not a valid pattern. Use none, zeros, ones, alt, numbers, random or # (where # is any number between 0-255).\n", patternArgStr);
          usage(context);
          poptFreeContext(context);
          return false;
@@ -748,7 +775,11 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
 
    // Iterations.
    if (iterationsArg >= 0)
-      gIterationsToDo = (unsigned int)iterationsArg;
+      gIterationsToDo = iterationsArg;
+
+   // Seed.
+   if (seedArg >= 0)
+      gSeed = (u32_t)seedArg;
 
    // TUI.
    if (noTuiArg)
@@ -1342,6 +1373,7 @@ void run(operation_enum operation)
                                  gMaxBufferSize,
                                  TransferInfoList::GEOMETRIC_PROGRESSION,
                                  gPattern,
+											gUserPattern,
                                  gFillMethod,
                                  gIOMethod,
                                  gSeed,
@@ -1380,6 +1412,7 @@ void run(operation_enum operation)
                                 gMaxBufferSize,
                                 TransferInfoList::GEOMETRIC_PROGRESSION,
                                 gPattern,
+										  gUserPattern,
                                 gFillMethod,
                                 gIOMethod,
                                 gSeed,

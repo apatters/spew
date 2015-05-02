@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -41,7 +41,7 @@ TransferInfoList *TransferInfoListFactory::createInstance(
       TransferInfoList::fill_method_t fillMethod,
       capacity_t offset,
       capacity_t transferSize,
-      u64_t seed)
+      u32_t seed)
 {
    if (fillMethod == TransferInfoList::RANDOM_FILL ||
        minBufferSize != maxBufferSize)

@@ -21,7 +21,7 @@
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -157,12 +157,18 @@ void usage()
 "   PATTERN                         Data pattern used when writing data.\n"
 "                                   Available patterns are:\n"
 "                                      %s - Fill buffer with 0's.\n"
+"                                      %s - Fill buffer with 1's.\n"
+"                                      %s - Fill buffer with alternating 0's and 1's.\n"
 "                                      %s - Fill buffer with random data.\n"
 "                                      %s - Fill buffer with the transfer\n"
+"                                      %s - Fill buffer with the seed pattern\n"
 "                                               number.\n"
 "                                   The default pattern is %s.\n"
-"   SEED                            Used to seed the random number generator\n"
-"                                   Must be >= 1 and <= 2^32.\n"
+"   SEED                            Used to seed the random number generator or\n"
+"                                   as the byte pattern for the user defined fill\n"
+"                                   depending on the pattern type selected.\n"
+"                                   Must be >= 1 and <= 2^32 for random pattern.\n"
+"                                   Must be >= 0 and <= 255 for user pattern.\n"
 "   TRANSFER_SIZE                   Total number of bytes to transfer per\n" 
 "                                   job (must be an even multiple of \n"
 "                                   BUFFER_SIZE). TRANSER_SIZE can be\n"
@@ -178,8 +184,11 @@ void usage()
                Transfer::BUFFER_SIZE_INCREMENT,
                Transfer::BUFFER_SIZE_INCREMENT,
                PATTERN_LOOKUP[Job::PATTERN_ZEROS],
+               PATTERN_LOOKUP[Job::PATTERN_ONES],
+               PATTERN_LOOKUP[Job::PATTERN_ALTERNATING],
                PATTERN_LOOKUP[Job::PATTERN_RANDOM],
                PATTERN_LOOKUP[Job::PATTERN_TRANSFER_NUMBERS],
+               PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
                PATTERN_LOOKUP[DEFAULT_PATTERN]);
       cout << outStr << endl;
 }

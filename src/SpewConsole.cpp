@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -230,7 +230,7 @@ void SpewConsole::cumulativeStatistics(capacity_t jobBytesTransferred,
    switch (mCurrentIoDirection)
    {
    case READING:
-      printf("RTR: %11.2Lf %-5s   Tranfser time: %s    IOPS: %11.2Lf\n",
+      printf("RTR: %11.2Lf %-5s   Transfer time: %s    IOPS: %11.2Lf\n",
              transferRate, 
              getTransferRateUnitsStr(mCurrentUnits), 
              jobTransferTime.getElapsedTimeStr().c_str(),

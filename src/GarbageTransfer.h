@@ -27,15 +27,13 @@
 
 #include "common.h"
 #include "Job.h"
-#include "Log.h"
 #include "Transfer.h"
 
 
 class GarbageTransfer: public Transfer
 {
 public:
-   GarbageTransfer(Log &logger,
-                   int fd, 
+   GarbageTransfer(int fd, 
                    unsigned char *buffer, 
                    capacity_t bufferSize,
                    capacity_t id);

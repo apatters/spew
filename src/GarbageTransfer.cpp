@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -34,12 +34,11 @@ using namespace std;
 #include "GarbageTransfer.h"
 
 //////////////////////////  GarbageTransfer::GarbageTransfer()  ///////////////
-GarbageTransfer::GarbageTransfer(Log &logger,
-                                 int fd, 
+GarbageTransfer::GarbageTransfer(int fd, 
                                  unsigned char *buffer, 
                                  capacity_t bufferSize,
                                  capacity_t id) : 
-   Transfer(logger, fd, buffer, bufferSize, id)
+   Transfer(fd, buffer, bufferSize, id)
 {
 }
 

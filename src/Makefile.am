@@ -14,7 +14,7 @@ libcommon_a_SOURCES = \
         GarbageTransfer.cpp GarbageTransfer.h \
         NumbersTransfer.cpp NumbersTransfer.h \
         RandomTransfer.cpp RandomTransfer.h \
-        ZerosTransfer.cpp ZerosTransfer.h \
+        BytePatternTransfer.cpp BytePatternTransfer.h \
 	TransferInfo.cpp TransferInfo.h \
 	TransferInfoList.cpp TransferInfoList.h \
 	TransferInfoListFactory.cpp TransferInfoListFactory.h \

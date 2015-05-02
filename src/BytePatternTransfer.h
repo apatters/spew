@@ -1,6 +1,6 @@
 //////////////////////////  -*-C++-*- /////////////////////////////////////////
 //
-// TransferInfoListFactory.h
+// BytePatternTransfer.h
 //
 // Spew
 //
@@ -20,30 +20,39 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-#ifndef TRANSFERINFOLISTFACTORY_H
-#define TRANSFERINFOLISTFACTORY_H
+#ifndef BYTEPATTERNTRANSFER_H
+#define BYTEPATTERNTRANSFER_H
+
+#include <string>
 
 #include "common.h"
+#include "Job.h"
+#include "Log.h"
+#include "Transfer.h"
 #include "TransferInfo.h"
-#include "TransferInfoList.h"
 
-class TransferInfoListFactory
+
+class BytePatternTransfer: public Transfer
 {
 public:
-   static TransferInfoList *createInstance(
-      capacity_t minBufferSize,
-      capacity_t maxBufferSize,
-      TransferInfoList::buffer_size_method_t bufferSizeMethod,
-      TransferInfoList::fill_method_t fillMethod,
-      capacity_t offset,
-      capacity_t transferSize,
-      u32_t seed);
+   BytePatternTransfer(int fd, 
+							  unsigned char *buffer, 
+							  capacity_t bufferSize,
+							  pid_t pid,
+							  unsigned char pattern);
+             
+   virtual int read(const TransferInfo &transInfo, string &errorMsg);
+   virtual int write(const TransferInfo &transInfo, string &errorMsg);
+
+   virtual ~BytePatternTransfer() {};
 
 private:
-   // Hide default methods.
-   TransferInfoListFactory();
-   TransferInfoListFactory(const TransferInfoListFactory&); 
-   TransferInfoListFactory& operator=(const TransferInfoListFactory &fact);
+   BytePatternTransfer();                     // Hide default constructor.
+   BytePatternTransfer(const BytePatternTransfer&); // Hide copy constructor.
+
+protected:
+   int mPattern;
+
 };
 
-#endif  // TRANSFERINFOLISTFACTORY_H
+#endif  // BYTEPATTERNTRANSFER_H

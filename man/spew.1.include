@@ -43,7 +43,7 @@ Then read in the same data using the same request size and offset.
 The data is checked to ensure that the data read in matches the data
 read out.
 .
-Write and read tranfers rates are displayed in kibibytes/second.  Read
+Write and read tranfer rates are displayed in kibibytes/second.  Read
 are write transfer times are displayed in seconds.
 .PP
 \fBspew --read -i 0 -u M -p zeros -b 512 1m /dev/zero\fR
@@ -82,14 +82,14 @@ quit (via signal or TUI command).
 The data is checked to ensure that the data read in matches the data
 read out.
 .
-A curses-based TUI is used to diplay iteration and cumulative transfer
+A curses-based TUI is used to display iteration and cumulative transfer
 rates, transfer times, and bytes transferred.
 .
 Display verbose statistics after quitting.
 .
 [ALGORITHMS]
 .
-The folllowing algorithm is used to determine blocksize when
+The following algorithm is used to determine blocksize when
 MAX_BUFFER_SIZE > MIN_BUFFER_SIZE:
 .PP
 Find the largest blocksize that is a power of 2 and is >=
@@ -101,7 +101,7 @@ of 2 and is >= MIN_BUFFER_SIZE. Call this minbuffersize.
 Chunksize = maxbuffersize * (difference in number of bits between min
 and maxbuffersize + 1).
 .
-The number of chunks is TRANFSER_SIZE/chunksize. Call this numchunks.
+The number of chunks is TRANSFER_SIZE/chunksize. Call this numchunks.
 .
 There will be numchunks number of read/writes that are of size
 maxbuffersize, 2 * numchunks number of read/writes that are of size

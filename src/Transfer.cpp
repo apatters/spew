@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -34,12 +34,10 @@ using namespace std;
 #include "Transfer.h"
 
 //////////////////////////  Transfer::Transfer()  /////////////////////////////
-Transfer::Transfer(Log &logger,
-                   int fd, 
+Transfer::Transfer(int fd, 
                    unsigned char *buffer, 
                    capacity_t maxBufferSize,
                    capacity_t id) : 
-   mLogger(logger),
    mFd(fd),
    mBuffer(buffer), 
    mMaxBufferSize(maxBufferSize),
@@ -74,7 +72,7 @@ int Transfer::read(const TransferInfo &transInfo,  string &errorMsg)
 
       if ((capacity_t)count < remaining)
       {
-         mLogger.logNote("Read underrun -- read only %llu bytes of %llu bytes at offset %llu during transfer %llu.\n", (capacity_t)count, bufferSize,  offset + bufferSize - remaining, transferNumber); 
+         errorMsg = strPrintf("Read underrun -- read only %llu bytes of %llu bytes at offset %llu during transfer %llu.\n", (capacity_t)count, bufferSize,  offset + bufferSize - remaining, transferNumber); 
       }
       remaining -= count;
    }
@@ -107,7 +105,7 @@ int Transfer::write(const TransferInfo &transInfo, string &errorMsg)
 
       if ((capacity_t)count < remaining)
       {
-         mLogger.logNote("Write underrun -- wrote only %llu bytes of %llu bytes at offset %llu during transfer %llu.\n", (capacity_t)count, bufferSize,  offset + bufferSize - remaining, transferNumber); 
+         errorMsg = strPrintf("Write underrun -- wrote only %llu bytes of %llu bytes at offset %llu during transfer %llu.\n", (capacity_t)count, bufferSize,  offset + bufferSize - remaining, transferNumber); 
       }
       remaining -= count;
    }

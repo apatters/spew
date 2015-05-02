@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -34,13 +34,12 @@ using namespace std;
 #include "RandomTransfer.h"
 
 //////////////////////////  RandomTransfer::RandomTransfer()  /////////////////
-RandomTransfer::RandomTransfer(Log &logger,
-                               int fd, 
+RandomTransfer::RandomTransfer(int fd, 
                                unsigned char *buffer, 
                                capacity_t bufferSize,
                                capacity_t id,
-                               u32_t seed) : 
-   Transfer(logger, fd, buffer, bufferSize, id)
+                               u64_t seed) : 
+   Transfer(fd, buffer, bufferSize, id)
 {
    mRnd.setSeed(seed);
 }
@@ -100,8 +99,8 @@ int RandomTransfer::read(const TransferInfo &transInfo, string &errorMsg)
          {
             endingErrorRange = fileOffset + (i * sizeof(struct datum)) - 1;
             errors += strPrintf("\t%lld - %lld\n",
-               startingErrorRange + (bufferSize * transferNumber), 
-               endingErrorRange  + (bufferSize * transferNumber));
+               startingErrorRange, 
+               endingErrorRange);
             inErrorRange = false;
          }
       }
@@ -122,8 +121,8 @@ int RandomTransfer::read(const TransferInfo &transInfo, string &errorMsg)
    {
       endingErrorRange = fileOffset + bufferSize - 1;
       errors += strPrintf("\t%lld - %lld\n", 
-                          startingErrorRange + (bufferSize * transferNumber),
-                          endingErrorRange + (bufferSize * transferNumber));
+                          startingErrorRange, 
+                          endingErrorRange);
 
    }
    if (errorsFound > 0)

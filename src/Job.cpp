@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -35,7 +35,7 @@ using namespace std;
 #include "GarbageTransfer.h"
 #include "NumbersTransfer.h"
 #include "RandomTransfer.h"
-#include "ZerosTransfer.h"
+#include "BytePatternTransfer.h"
 #include "TransferInfo.h"
 #include "TransferInfoList.h"
 #include "TransferInfoListFactory.h"
@@ -50,6 +50,7 @@ Job::Job(Log &logger,
          capacity_t maxBufferSize,
          TransferInfoList::buffer_size_method_t bufferSizeMethod,
          pattern_t pattern,
+			unsigned char userPattern,
          TransferInfoList::fill_method_t fillMethod,
          io_method_t ioMethod,
          u32_t seed,
@@ -63,6 +64,7 @@ Job::Job(Log &logger,
    mMaxBufferSize(maxBufferSize),
    mBufferSizeMethod(bufferSizeMethod),
    mPattern(pattern),
+	mUserPattern(userPattern),
    mFillMethod(fillMethod),
    mIOMethod(ioMethod),
    mSeed(seed),

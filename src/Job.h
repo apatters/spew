@@ -38,8 +38,12 @@ class Job
 public:
    typedef enum {PATTERN_NONE,
                  PATTERN_ZEROS, 
+                 PATTERN_ONES, 
+                 PATTERN_ALTERNATING, 
                  PATTERN_TRANSFER_NUMBERS, 
-                 PATTERN_RANDOM} pattern_t;
+                 PATTERN_RANDOM,
+                 PATTERN_USER_DEFINED} pattern_t;
+
    typedef enum {ASYNCH_IO,
                  SYNCH_IO,
                  DIRECT_IO} io_method_t;
@@ -53,6 +57,7 @@ public:
        capacity_t maxBufferSize,
        TransferInfoList::buffer_size_method_t bufferSizeMethod,
        pattern_t pattern,
+		 unsigned char userPattern,
        TransferInfoList::fill_method_t fillMethod,
        io_method_t ioMethod,
        u32_t seed,
@@ -121,6 +126,7 @@ protected:
    capacity_t mMaxBufferSize;
    TransferInfoList::buffer_size_method_t mBufferSizeMethod;
    pattern_t mPattern;
+	unsigned char mUserPattern;
    TransferInfoList::fill_method_t mFillMethod;     // Random or sequential.
    io_method_t mIOMethod;         // Synchronous or asynchronous.
 

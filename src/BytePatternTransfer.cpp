@@ -1,6 +1,6 @@
 //////////////////////////  -*-C++-*- /////////////////////////////////////////
 //
-// ZerosTransfer.cpp
+// BytePatternTransfer.cpp
 //
 // Spew
 //
@@ -31,22 +31,25 @@ namespace std {} using namespace std;
 
 #include "common.h"
 #include "Transfer.h"
-#include "ZerosTransfer.h"
+#include "BytePatternTransfer.h"
 
-//////////////////////////  ZerosTransfer::ZerosTransfer()  ///////////////////
-ZerosTransfer::ZerosTransfer(int fd, 
-                             unsigned char *buffer, 
-                             capacity_t bufferSize,
-                             pid_t pid) : 
+//////////////  BytePatternTransfer::BytePatternTransfer()  ///////////////////
+BytePatternTransfer::BytePatternTransfer(int fd, 
+													  unsigned char *buffer, 
+													  capacity_t bufferSize,
+													  pid_t pid,
+													  unsigned char pattern) :
+   mPattern(pattern),
    Transfer(fd, buffer, bufferSize, pid)
 {
-   // Zero out buffer.  This buffer will not change during writes. 
-   memset(mBuffer, 0, mMaxBufferSize);
+   // Set mBuffer to specified pattern.  This buffer will not change during
+   // writes. 
+   memset(mBuffer, (int)pattern, mMaxBufferSize);
 }
 
 
-//////////////////////////  ZerosTransfer::read()  ////////////////////////////
-int ZerosTransfer::read(const TransferInfo &transInfo, string &errorMsg)
+////////////////////  BytePatternTransfer::read()  ////////////////////////////
+int BytePatternTransfer::read(const TransferInfo &transInfo, string &errorMsg)
 {  
    int ret;
    ret = this->seek(transInfo, errorMsg);
@@ -73,13 +76,15 @@ int ZerosTransfer::read(const TransferInfo &transInfo, string &errorMsg)
 
    // Check contents of buffer.
    string errors;
+   string recieved;
+   string expected;
    capacity_t errorsFound = 0LLU;
    bool inErrorRange = false;
    capacity_t startingErrorRange = fileOffset;
    capacity_t endingErrorRange = fileOffset;
    for (capacity_t i = 0; i < bufferSize; i++)
    {
-      if (*(mBuffer + i) == 0)
+      if (*(mBuffer + i) == mPattern)
       {
          if (inErrorRange)
          {
@@ -90,12 +95,24 @@ int ZerosTransfer::read(const TransferInfo &transInfo, string &errorMsg)
                errors += strPrintf("\t%lld - %lld\n", 
                                    startingErrorRange, 
                                    endingErrorRange);
+
+            errors += strPrintf("expected: ");
+            errors += expected;
+            errors += strPrintf("\n");
+            errors += strPrintf("recieved: ");
+            errors += recieved;
+            errors += strPrintf("\n");
+
             inErrorRange = false;
+            recieved = strPrintf("");
+            expected = strPrintf("");
          }
       }
       else
       {
          errorsFound++;
+         recieved += strPrintf("%02x", *(mBuffer+i));
+         expected += strPrintf("%02x", mPattern);
          if (!inErrorRange)
          {
             startingErrorRange = fileOffset + i;
@@ -126,8 +143,8 @@ int ZerosTransfer::read(const TransferInfo &transInfo, string &errorMsg)
 }
 
 
-//////////////////////////  ZerosTransfer::write()  ///////////////////////////
-int ZerosTransfer::write(const TransferInfo &transInfo, string &errorMsg)
+//////////////////////////  BytePatternTransfer::write()  ///////////////////////////
+int BytePatternTransfer::write(const TransferInfo &transInfo, string &errorMsg)
 {  
    int ret;
    ret = this->seek(transInfo, errorMsg);

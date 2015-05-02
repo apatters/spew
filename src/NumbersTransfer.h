@@ -27,15 +27,13 @@
 
 #include "common.h"
 #include "Job.h"
-#include "Log.h"
 #include "Transfer.h"
 
 
 class NumbersTransfer: public Transfer
 {
 public:
-   NumbersTransfer(Log &logger,
-                   int fd, 
+   NumbersTransfer(int fd, 
                    unsigned char *buffer, 
                    capacity_t bufferSize,
                    capacity_t id);
