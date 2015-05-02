@@ -33,6 +33,7 @@ namespace std {} using namespace std;
 #include <mntent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <cstring>
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #endif

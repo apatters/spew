@@ -1,3 +1,12 @@
+Changes since 1.0.6
+
+* Fixed a bug where the IOPS counter was not being reset between iterations 
+  resulting in IOPS increasing after every interation.
+
+* Fixed gcc 4.2 and 4.3 compile problems
+
+* Spew no longer truncates the file when using the -o|--offset option.
+
 Changes since 1.0.5
 
 * Ported to IA-64 HP-UX.

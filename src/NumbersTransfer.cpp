@@ -28,6 +28,7 @@ namespace std {} using namespace std;
 
 #include <unistd.h>
 #include <errno.h>
+#include <cstring>
 
 #include "common.h"
 #include "Transfer.h"

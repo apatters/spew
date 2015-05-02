@@ -26,6 +26,8 @@ namespace std {} using namespace std;
 #include <config.h>
 #endif
 
+#include <cstring>
+
 #include "common.h"
 #include "Random.h"
 #include "RandomTransferInfoList.h"

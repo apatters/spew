@@ -378,6 +378,7 @@ void SpewTui::intermediateStatistics(capacity_t hackRowBytesTransferred,
 /////////////////////  SpewTui::cumulativeStatistics() ////////////////////////
 void SpewTui::cumulativeStatistics(capacity_t jobBytesTransferred,
                                    const TimeHack& jobTransferTime,
+                                   capacity_t jobOps,
                                    capacity_t totalBytesRead,
                                    const TimeHack& totalReadTransferTime,
                                    capacity_t totalReadOps,

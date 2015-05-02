@@ -76,10 +76,12 @@ int WriteJob::startJob()
    int flags;
 
 #ifdef O_LARGEFILE
-   flags = O_WRONLY|O_CREAT|O_TRUNC|O_LARGEFILE;
+   flags = O_WRONLY|O_CREAT|O_LARGEFILE;
 #else
-   flags = O_WRONLY|O_CREAT|O_TRUNC;
+   flags = O_WRONLY|O_CREAT;
 #endif
+	if (mOffset == 0)
+		flags |= O_TRUNC;
    switch (mIOMethod)
    {
    case ASYNCH_IO:

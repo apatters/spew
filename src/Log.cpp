@@ -29,6 +29,7 @@ namespace std {} using namespace std;
 #include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <cstring>
 
 #include "common.h"
 #include "Log.h"
