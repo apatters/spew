@@ -50,7 +50,7 @@ are write transfer times are displayed in seconds.
 .PP
 or
 .PP
-\fBsnarf -i 0 -u M -p zeros -b 512 1m /dev/zero\fR
+\fBgorge -i 0 -u M -p zeros -b 512 1m /dev/zero\fR
 .PP
 Read 1 mebibyte of data using 512 byte requests from the file
 \fI/dev/zero\fR an infinite number of times using the zeros pattern
@@ -123,5 +123,14 @@ integrity problem has occurred:
 od -A d --format=d8 --width=32  <file>
 .PP
 
+[FILES]
+.TP
+\fl$HOME/.spewrc\fR or \fl$SPEWRC\fR
+Holds user default options. These options precede any options included
+on the command-line.
+.TP
+\flSYSCONFDIR/spew.conf\fR
+Holds system-wide default options.  These options precede any options
+included on the command-line  and options included from \fl$HOME/.spewrc\fR or \fl$SPEWRC\fR.
 
 

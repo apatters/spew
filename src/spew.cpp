@@ -76,11 +76,14 @@ static const char *PROG_NAME_LOOKUP[] =
 {
    (char *)NULL,
    "spew",
-   "snarf",
+   "gorge",
    "regorge",
    (char *)NULL,
 
 };
+static const char SPEWRC_ENV[] = "SPEWRC";
+static const char DEFAULT_SPEWRC_FILENAME[] = ".spewrc";
+static const char SYSTEM_SPEWRC_FILENAME[] = "spew.conf";
 static const char PROG_VERSION[] = VERSION;
 static const int MAX_TMP_STR_LEN = 1024;
 static const unsigned int INDENT_SIZE = 4;
@@ -127,6 +130,7 @@ capacity_t gTransferSize = 0;
 string gFile = "";
 bool gUseTui = false;
 string gLogfilePath = "";
+bool gUseStdRcFiles = true;
 Log *gLogger = (Log *)NULL;
 capacity_t gJobId = 0;
 SpewDisplay *gDisplay = (SpewDisplay *)NULL; 
@@ -135,9 +139,10 @@ TimeHack gTotalReadTransferTime;
 TimeHack gTotalWriteTransferTime;
 capacity_t gTotalBytesRead = 0;
 capacity_t gTotalBytesWritten = 0;
+capacity_t gTotalWriteOps = 0;
+capacity_t gTotalReadOps = 0;
 TimeHack gProgramStartTime;
 unsigned int gFoundTransferErrors = 0;
-
 
 //////////////////////////////////////////////////////////////////////////////
 ////////////////////  Function Prototypes  ///////////////////////////////////
@@ -145,10 +150,8 @@ unsigned int gFoundTransferErrors = 0;
 void error_msg(char *fmt, ...);
 void note(char *fmt, ...);
 void usage();
-bool parse_options(int argc, const char **argv);
+bool parse_options(int argc, const char **argv, string& cmdArgs);
 bool validate_options();
-void spew();
-void snarf();
 void end_program(int exitCode);
 void end_program(int exitCode, char *fmt, ...);
 void update_transfer_totals(const Job *job,
@@ -244,6 +247,10 @@ void help(poptContext &context)
 "                                    data. Available patterns are: none, \n"
 "                                    zeros, random, and numbers. The default\n"
 "                                    pattern is %s.\n"
+"  RCFILE                            Read additional command-line options\n"
+"                                    from RCFILE.  Other options on the\n"
+"                                    command-line will override options in\n"
+"                                    RCFILE.\n"
 "  SEED                              Used to seed the random number generator\n"
 "                                    Must be >= 1 and <= 2^32.\n"
 "  TRANSFER_SIZE                     Total number of bytes to transfer (must\n"
@@ -277,7 +284,7 @@ void help(poptContext &context)
 //////////////////////////  usage()  /////////////////////////////////////////
 void usage(poptContext &context)
 {
-   poptSetOtherOptionHelp(context, "[OPTION]... TRANSFER_SIZE[kKmMgG] FILE");
+   poptSetOtherOptionHelp(context, "TRANSFER_SIZE[kKmMgG] FILE");
    poptPrintUsage(context, stdout, 0);
 }
 
@@ -309,14 +316,14 @@ capacity_t get_size(const char *arg)
          size *= 1024LL * 1024LL * 1024LL * 102;
          break;
       default:
-         error_msg("Invalid unit\n");
+         error_msg("Invalid unit in argument \"%s\"\n", arg);
          exit(EXIT_ERROR_USAGE);
          break;
       }
    }
    else if (sscanf(arg, "%llu", &size) != 1)
    {
-      error_msg("Could not parse size.\n");
+      error_msg("Could not parse size for argument \"%s\".\n", arg);
       exit(EXIT_ERROR_USAGE);
    }
    return size;
@@ -358,23 +365,171 @@ Units_t get_units(const char *arg)
          units = TERABYTES;
          break;
       default:
-         error_msg("Invalid units - use kKmMgG.\n");
+         error_msg("Invalid unit in argument \"%s\" - use kKmMgG.\n", arg);
          exit(EXIT_ERROR_USAGE);
          break;
       }
    }
    else
    {
-      error_msg("Could not parse units.\n");
+      error_msg("Could not parse units in argument \"%s\"\n", arg);
       exit(EXIT_ERROR_USAGE);
    }
    return units;
 }
 
 
+//////////////////////////  parse_rcfile()  ///////////////////////////////////
+bool parse_rcfile(FILE *rcfile,
+                  string& cmdArgs)
+{
+   char rcArgs[MAX_TMP_STR_LEN];
+   int len;
+   while (fgets(rcArgs, MAX_TMP_STR_LEN, rcfile) != (char *)NULL)
+   {
+      // Chop off string after comment character.
+      char *commentStart = strchr(rcArgs, '#');
+      if (commentStart)
+         *commentStart = '\0';
+      len = strlen(rcArgs);
+      if (rcArgs[len - 1] == '\n')
+         rcArgs[len - 1] = '\0';
+      if (rcArgs[0] != '\0')
+      {
+         cmdArgs += rcArgs;
+         cmdArgs += " ";
+      }
+   }
+   return true;
+}
+
+
+//////////////////////////  read_rcfiles()  ///////////////////////////////////
+bool read_rcfiles(int argc, const char **argv, string& cmdArgs)
+{
+   struct stat statbuf;
+   string rcFilePath;
+   vector<string> rcFilePaths;
+
+
+   // Check command-line for --no-rcfiles option.
+   for (int i = 0; i < argc; i++)
+   {
+      if (strncmp(argv[i], "--no-rcfiles", strlen("--no-rcfiles")) == 0)
+      {
+         gUseStdRcFiles = false;
+         break;
+      }
+   }
+
+   // Read standard config locations.
+   if (gUseStdRcFiles)
+   {
+      // Read system-wide rcfile if it exists.
+      rcFilePath = QUOTE(SYSCONFDIR);
+      rcFilePath += "/";
+      rcFilePath += SYSTEM_SPEWRC_FILENAME;
+      if (stat(rcFilePath.c_str(), &statbuf) >= 0)
+      {
+         rcFilePaths.push_back(rcFilePath);
+      }
+      else
+      {
+         if (errno != ENOENT)
+         {
+            error_msg("Cannot access rc file \"%s\" -- %s.\n", 
+                      rcFilePath.c_str(), strError(errno).c_str());
+         }
+      }
+
+      rcFilePath = "";
+      if (getenv(SPEWRC_ENV))
+      {
+         rcFilePath = getenv(SPEWRC_ENV);
+      }
+      else
+      {
+         char *home = getenv("HOME");
+         if (home)
+         {
+            rcFilePath = home;
+            rcFilePath += "/";
+            rcFilePath += DEFAULT_SPEWRC_FILENAME;
+         }
+      }
+      if (stat(rcFilePath.c_str(), &statbuf) >= 0)
+      {
+         rcFilePaths.push_back(rcFilePath);
+      }
+      else
+      {
+         if (errno != ENOENT)
+         {
+            error_msg("Cannot access rc file \"%s\" -- %s.\n", 
+                      rcFilePath.c_str(), strError(errno).c_str());
+         }
+      }
+   }
+
+   // Check the command-line for --rcfile.
+   for (int i = 1; i < argc; i++)
+   {
+      rcFilePath = "";
+      if (strncmp(argv[i], "--rcfile", 8) == 0)
+      {
+         char *eqPos = strrchr(argv[i], '=');
+         if (eqPos == (char *)NULL)
+         {
+            if (i + 1 < argc)
+            {
+               rcFilePath = argv[i+1];
+            }
+            else
+            {
+               error_msg("Missing RCFILE argument.\n");
+               return false;
+            }
+         }
+         else
+         {
+            rcFilePath = eqPos + 1;
+         }
+         if (stat(rcFilePath.c_str(), &statbuf) < 0)
+         {
+            error_msg("Cannot access RCFILE \"%s\" -- %s.\n", 
+                      rcFilePath.c_str(), strError(errno).c_str());
+            return false;
+         }
+         else
+            rcFilePaths.push_back(rcFilePath);
+         break;
+      }
+   }
+
+   vector<string>::iterator pathIter;
+   for (pathIter = rcFilePaths.begin();
+        pathIter != rcFilePaths.end();
+        pathIter++)
+   {
+      FILE *rcfile = fopen(pathIter->c_str(), "r");
+      if (rcfile == (FILE *)NULL)
+      {
+         error_msg("Cannot open rc file \"%s\" -- %s.\n", 
+                   pathIter->c_str(), strError(errno).c_str());
+      }
+      else
+      {
+         parse_rcfile(rcfile, cmdArgs);
+         fclose(rcfile);
+      }
+   }
+
+   return true;
+}
+
 
 //////////////////////////  parse_options()  /////////////////////////////////
-bool parse_options(int argc, const char **argv)
+bool parse_options(int argc, const char **argv, string& cmdArgs)
 {
    char *minBufferSizeArgStr = (char *)NULL;
    char *maxBufferSizeArgStr = (char *)NULL;
@@ -382,6 +537,7 @@ bool parse_options(int argc, const char **argv)
    char *patternArgStr = (char *)NULL;
    char *unitsArgStr = (char *)NULL;
    char *logfilePathArgStr = (char *)NULL;
+   char *dummyArgStr = (char *)NULL;
    int writeArg = 0;
    int readArg = 0;
    int readAfterWriteArg = 0;
@@ -399,7 +555,7 @@ bool parse_options(int argc, const char **argv)
    int directArg = 0;
    int randomArg = 0;
    int generateLoadArg = 0;
-
+   int useStdRcFilesArg = 1;
 
    struct poptOption optionsTable[] =  {
       {"max-buffer-size", 'B', POPT_ARG_STRING, &maxBufferSizeArgStr, 0, "Each read(2)/write(2) call uses a maximum buffer of size BUFFER_SIZE.", "BUFFER_SIZE"},
@@ -412,13 +568,15 @@ bool parse_options(int argc, const char **argv)
       {"iterations", 'i', POPT_ARG_INT, &iterationsArg, 0, "Write/read data COUNT times. If count is 0, repeats forever.", "COUNT"},
       {"logfile", 'l', POPT_ARG_STRING, &logfilePathArgStr, 0, "Send log messages to LOGFILE.", "LOGFILE"},
       {"no-progress", 0, POPT_ARG_NONE, &noProgressArg, 0, "Don't show progess (default).", NULL},
+      {"no-rcfiles", 0, POPT_ARG_NONE, NULL, 0, "Don't use standard rcfiles.", NULL},
+      {"no-statistics", 'q', POPT_ARG_NONE, &noStatisticsArg, 0, "Don't output statistics.", NULL},
       {"no-tui", 0, POPT_ARG_NONE, &noTuiArg, 0, "Don't use TUI interface.", NULL},
       {"offset", 'o', POPT_ARG_STRING, &offsetArgStr, 0, "Seek to OFFSET before starting I/O.", "OFFSET"},
       {"progress", 'P', POPT_ARG_NONE, &progressArg, 0, "Show progess.", NULL},
       {"pattern", 'p', POPT_ARG_STRING, &patternArgStr, 0, "Use data pattern PATTERN when reading or writing data.", "PATTERN"},
-      {"no-statistics", 'q', POPT_ARG_NONE, &noStatisticsArg, 0, "Don't output statistics.", NULL},
       {"random", 'r', POPT_ARG_NONE, &randomArg, 0, "Read/Write buffers to random offsets.", NULL},
       {"raw", 0, POPT_ARG_NONE, &readAfterWriteArg, 0, "An alias for --read-after-write.", NULL},
+      {"rcfile", 0, POPT_ARG_STRING, &dummyArgStr, 0, "Read command-line options from RCFILE.", "RCFILE"},
       {"read", 0, POPT_ARG_NONE, &readArg, 0, "Read date from FILE.", NULL},
       {"read-after-write", 0, POPT_ARG_NONE, &readAfterWriteArg, 0, "Read back data after writing to FILE.", NULL},
       {"seed", 'S', POPT_ARG_LONG, &gSeed, 0, "Use SEED for random number seed.","SEED"},
@@ -431,14 +589,41 @@ bool parse_options(int argc, const char **argv)
       {"detailed-statistics", 'v', POPT_ARG_NONE, &detailedStatisticsArg, 0, "Output detailed statistics.", NULL},
       {"write", 0, POPT_ARG_NONE, &writeArg, 0, "Write data to FILE.", NULL},
       {"help", '?', POPT_ARG_NONE, &helpArg, 0, "Show this help and exit.", NULL},
-      { NULL, 0, 0, NULL, 0 }
+      POPT_TABLEEND
    };
 
-   poptContext context = poptGetContext(gPrgName, argc, argv, optionsTable, 0);
+   cmdArgs = "";
+   if (!read_rcfiles(argc, argv, cmdArgs))
+       return false;
+   for (int i = 1; i < argc; i++)
+   {
+      cmdArgs += argv[i];
+      cmdArgs += " ";
+   }
+   cmdArgs = " " + cmdArgs;
+   cmdArgs = argv[0] + cmdArgs;
+   int newArgc;
+   const char **newArgv;
+   poptParseArgvString((char *)cmdArgs.c_str(), &newArgc, &newArgv);
+   poptContext context = poptGetContext(gPrgName,
+                                        newArgc, 
+                                        newArgv, 
+                                        optionsTable, 
+                                        POPT_CONTEXT_POSIXMEHARDER);
+
    int rc = poptGetNextOpt(context);
    if (rc < -1)
    {
-      error_msg("%s\n", poptStrerror(rc));
+      switch (rc)
+      {
+      case POPT_ERROR_BADOPT:
+         error_msg("bad or unknown option \"%s\"\n.", 
+                   poptBadOption(context, 0));
+         break;
+      default:
+         error_msg("%s.\n", poptStrerror(rc));
+         break;
+      }
       usage(context);
       poptFreeContext(context);
       return false;
@@ -589,9 +774,15 @@ bool parse_options(int argc, const char **argv)
    if (gIterationsToDo < 0)
       gIterationsToDo = DEFAULT_ITERATIONS;
 
-   if (poptPeekArg(context))
-      gTransferSize = get_size(poptGetArg(context));
-   else
+   // Count the rest of the arguments.
+   const char **argsLeft = poptGetArgs(context);
+   int argsCount = 0;
+   if (argsLeft)
+   {
+      while (argsLeft[argsCount] != NULL)
+         argsCount++;
+   }
+   if (argsCount < 2)
    {
       error_msg("Need TRANSFER_SIZE and FILE.\n");
       usage(context);
@@ -599,15 +790,8 @@ bool parse_options(int argc, const char **argv)
       return false;
    }
 
-   if (poptPeekArg(context))
-      gFile = poptGetArg(context);
-   else
-   {
-      error_msg("Need FILE.\n");
-      usage(context);
-      poptFreeContext(context);
-      return false;
-   }
+   gTransferSize = get_size(poptGetArg(context));
+   gFile = poptGetArg(context);
 
    if (gSeed == DEFAULT_SEED)
    {
@@ -683,12 +867,12 @@ bool validate_options()
    {
       if (gMinBufferSize % Transfer::DIRECTIO_BUFFER_SIZE_INCREMENT != 0)
       {
-         error_msg("MIN_BUFFER_SIZE must be a multiple of %llu bytes when using direct I/O.\n", Transfer::DIRECTIO_BUFFER_SIZE_INCREMENT);
+         error_msg("MIN_BUFFER_SIZE must be a multiple of %llu bytes when using direct I/O. Use -b|--min-buffer-size to set MIN_BUFFER_SIZE.\n", Transfer::DIRECTIO_BUFFER_SIZE_INCREMENT);
          return false;
       }
       if (gMaxBufferSize % Transfer::DIRECTIO_BUFFER_SIZE_INCREMENT != 0)
       {
-         error_msg("MAX_BUFFER_SIZE must be a multiple of %llu bytes when using direct I/O.\n", Transfer::DIRECTIO_BUFFER_SIZE_INCREMENT);
+         error_msg("MAX_BUFFER_SIZE must be a multiple of %llu bytes when using direct I/O. Use -B|--max-buffer-size to set MAX_BUFFER_SIZE.\n", Transfer::DIRECTIO_BUFFER_SIZE_INCREMENT);
          return false;
       }
    }
@@ -843,27 +1027,32 @@ void cumulative_statistics(const Job *job,
                                   jobTransferTime.getTime(),
                                   gTotalBytesRead,
                                   gTotalReadTransferTime.getTime(),
+                                  gTotalReadOps,
                                   gTotalBytesWritten,
                                   gTotalWriteTransferTime.getTime(), 
+                                  gTotalWriteOps,
                                   now - gProgramStartTime);
 
    long double transferRate = convertCapacity((long double)job->getJobBytesTransferred(), gUnits)/jobTransferTime.getTime();
+   long double iops = (long double)job->getTotalNumberOfTransfers()/(long double)jobTransferTime.getTime();
 
    switch (ioDirection)
    {
    case READING:
-      gLogger->logNote("Iter: %5d   Read Transfer rate: %11.2Lf %-5s    Transfer time: %s\n",
+      gLogger->logNote("Iter: %5d   RTR: %11.2Lf %-5s   TT: %s   IOPS: %11.2Lf\n",
                        iteration,
                        transferRate, 
                        getTransferRateUnitsStr(gUnits), 
-                       jobTransferTime.getElapsedTimeStr().c_str());
+                       jobTransferTime.getElapsedTimeStr().c_str(),
+                       iops);
       break;
    case WRITING:
-      gLogger->logNote("Iter: %5d  Write Transfer rate: %11.2Lf %-5s    Transfer time: %s\n",
+      gLogger->logNote("Iter: %5d   WTR: %11.2Lf %-5s   TT: %s   IOPS: %11.2Lf\n",
                        iteration,
                        transferRate, 
                        getTransferRateUnitsStr(gUnits), 
-                       jobTransferTime.getElapsedTimeStr().c_str());
+                       jobTransferTime.getElapsedTimeStr().c_str(),
+                       iops);
       break;
    }  
 }
@@ -876,32 +1065,37 @@ void run_statistics(unsigned int iterations)
    device = Log::OUTPUT_LOG_STDOUT;
    if (gVerbosity == VERBOSITY_LONG)
       device |= Log::OUTPUT_DISPLAY_STDOUT;
+
+   TimeHack now(TimeHack::getCurrentTime());
+
+   if (!gUseTui)
+      gLogger->note(device, "\n");
+   gLogger->note(device, "Total iterations:                %17u\n",
+                 iterations);
+   gLogger->note(device, "Total runtime:                   %17s\n",
+                 gProgramStartTime.getTimeDiffStr(now).c_str());
+
+   if (gTotalBytesWritten > 0)
    {
-      TimeHack now(TimeHack::getCurrentTime());
-
-      if (!gUseTui)
-         gLogger->note(device, "\n");
-      gLogger->note(device, "Total iterations:          %17u\n", iterations);
-      gLogger->note(device, "Total runtime:             %17s\n",
-                    gProgramStartTime.getTimeDiffStr(now).c_str());
-
-      if (gTotalBytesWritten > 0)
-      {
-         long double writeTransferRate = convertCapacity((long double)gTotalBytesWritten, gUnits)/(long double)gTotalWriteTransferTime.getTime();
-         gLogger->note(device, "Total write transfer time: %17s\n", 
-                       gTotalWriteTransferTime.getElapsedTimeStr().c_str());
-         gLogger->note(device, "Total write transfer rate: %11.2Lf %-5s\n",
-                       writeTransferRate, getTransferRateUnitsStr(gUnits));
-      }
-      if (gTotalBytesRead > 0)
+      long double writeTransferRate = convertCapacity((long double)gTotalBytesWritten, gUnits)/(long double)gTotalWriteTransferTime.getTime();
+      long double writeIops = (long double)gTotalWriteOps/(long double)gTotalWriteTransferTime.getTime();
+      gLogger->note(device, "Total write transfer time (WTT): %17s\n", 
+                    gTotalWriteTransferTime.getElapsedTimeStr().c_str());
+      gLogger->note(device, "Total write transfer rate (WTR): %11.2Lf %-5s\n",
+                    writeTransferRate, getTransferRateUnitsStr(gUnits));
+      gLogger->note(device, "Total write IOPS:                %11.2Lf IOPS\n", writeIops);
+                    
+   }
+   if (gTotalBytesRead > 0)
       
-      {
-         long double readTransferRate = convertCapacity((long double)gTotalBytesRead, gUnits)/(long double)gTotalReadTransferTime.getTime();
-         gLogger->note(device, "Total read transfer time:  %17s\n", 
-                       gTotalReadTransferTime.getElapsedTimeStr().c_str());
-         gLogger->note(device, "Total read transfer rate:  %11.2Lf %-5s\n",
-                       readTransferRate, getTransferRateUnitsStr(gUnits));
-      }
+   {
+      long double readTransferRate = convertCapacity((long double)gTotalBytesRead, gUnits)/(long double)gTotalReadTransferTime.getTime();
+      long double readIops = (long double)gTotalReadOps/(long double)gTotalWriteTransferTime.getTime();
+      gLogger->note(device, "Total read transfer time (RTT):  %17s\n", 
+                    gTotalReadTransferTime.getElapsedTimeStr().c_str());
+      gLogger->note(device, "Total read transfer rate (RTR):  %11.2Lf %-5s\n",
+                    readTransferRate, getTransferRateUnitsStr(gUnits));
+      gLogger->note(device, "Total read IOPS:                 %11.2Lf IOPS\n", readIops);
    }
 }
 
@@ -1126,6 +1320,17 @@ void do_job(Job *job, unsigned int iteration, IoDirection_t ioDirection)
       break;
    }
 
+   // Update IOPS.
+   switch (ioDirection)
+   {
+   case READING:
+      gTotalReadOps += job->getTotalNumberOfTransfers(); 
+      break;
+   case WRITING:
+      gTotalWriteOps += job->getTotalNumberOfTransfers(); 
+      break;
+   }
+
    cumulative_statistics(job, iteration, ioDirection);
    gDisplay->endJob();
 }
@@ -1225,6 +1430,7 @@ int main(int argc, char *argv[])
    // Process command-line options.
    gPrgName = argv[0];
    const char *prgBasename = basename(gPrgName);
+   string cmdArgs;
    
    for (int i = 1; PROG_NAME_LOOKUP[i] != (char *)NULL; i++)
    {
@@ -1235,7 +1441,7 @@ int main(int argc, char *argv[])
       }
    }
 
-   if (!parse_options(argc, (const char **)argv))
+   if (!parse_options(argc, (const char **)argv, cmdArgs))
    {
       exit(EXIT_ERROR_USAGE);
    }
@@ -1277,7 +1483,7 @@ int main(int argc, char *argv[])
    gDisplay->setCurrentUnits(gUnits);
    gProgramStartTime = TimeHack::getCurrentTime();
    gLogger->logStart();
-   gLogger->logCmdLine(argc, argv);
+   gLogger->logCmdLine(cmdArgs.c_str());
    gLogger->logNote("\n");
    gDisplay->startRun();
 

@@ -9,7 +9,7 @@ AM_MAINTAINER_MODE
 
 SPEW_AGE=1
 SPEW_REVISION=0
-SPEW_CURRENT=3
+SPEW_CURRENT=4
 AC_SUBST(SPEW_AGE)
 AC_SUBST(SPEW_REVISION)
 AC_SUBST(SPEW_CURRENT)
@@ -27,7 +27,7 @@ AC_PROG_LN_S
 
 # Checks for libraries.
 AC_CHECK_LIB(popt, poptGetContext, ,AC_MSG_ERROR([PACKAGE] requires popt))
-AC_CHECK_LIB(ncurses, is_term_resized, ,AC_MSG_ERROR([PACKAGE] requires ncurses))
+AC_CHECK_LIB(ncurses, wresize, ,AC_MSG_ERROR([PACKAGE] requires ncurses))
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -55,7 +55,6 @@ AC_CHECK_DECL(MNTTAB_PATH,mnttab=yes,mnttab=no,)
 if test "$mnttab" = yes; then
 AC_CHECK_FUNC([getmntent],AC_DEFINE(HAVE_MOUNT_CHECK,[1],Define to 1 if getmntent can be used to get mounted file systems.),,)
 fi
-
 
 # Get typedefs for 32 and 64 bit unsigned integers.
 AC_CHECK_SIZEOF(unsigned int)
@@ -98,9 +97,15 @@ AC_ARG_ENABLE(static-link,
 
 STATIC_LINK=""
 if test "x$static_spew" = "xyes" ; then
+  if test "x`uname`" = "xHP-UX" ; then
+    STATIC_LINK="-Wl,-a,archive_shared"
+  else
     STATIC_LINK="-static"
+  fi
 fi
 AC_SUBST(STATIC_LINK)
 
-AC_CONFIG_FILES([src/Makefile man/Makefile])
+CXXFLAGS="$CXXFLAGS -DSYSCONFDIR=${sysconfdir}"
+
+AC_CONFIG_FILES([src/Makefile man/Makefile etc/Makefile])
 AC_OUTPUT(Makefile)
