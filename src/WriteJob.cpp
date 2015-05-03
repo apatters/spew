@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -47,6 +47,7 @@ WriteJob::WriteJob(Log &logger,
                    capacity_t maxBufferSize,
                    TransferInfoList::buffer_size_method_t bufferSizeMethod,
                    pattern_t pattern,
+						 unsigned char userPattern,
                    TransferInfoList::fill_method_t fillMethod,
                    io_method_t ioMethod,
                    u32_t seed,
@@ -59,6 +60,7 @@ WriteJob::WriteJob(Log &logger,
          maxBufferSize,
          bufferSizeMethod,
          pattern,
+			userPattern,
          fillMethod,
          ioMethod,
          seed,
@@ -98,8 +100,8 @@ int WriteJob::startJob()
       return EXIT_ERROR_SYSTEM;
    }
 
-   mTransfer = TransferFactory::createInstance(mLogger,
-                                               mPattern,
+   mTransfer = TransferFactory::createInstance(mPattern,
+															  mUserPattern,
                                                mFd,
                                                mBuffer, 
                                                mMaxBufferSize, 
@@ -138,6 +140,7 @@ int WriteJob::runTransfers(capacity_t numTransfers, bool continueAfterError)
 
    this->setTransferStartTime();
    mBytesTransferred = 0;
+	mLastErrorMsg = "";
    int exitCode = EXIT_OK;
    for (capacity_t i = 0; i < numTransfers; i++)
    {

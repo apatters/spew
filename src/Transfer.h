@@ -26,7 +26,6 @@
 #include <string>
 
 #include "common.h"
-#include "Log.h"
 #include "TransferInfo.h"
 
 
@@ -35,7 +34,7 @@ class Transfer
 public:
    static const capacity_t BUFFER_SIZE_INCREMENT = 512LLU;
    static const capacity_t OFFSET_INCREMENT = BUFFER_SIZE_INCREMENT;
-#ifdef __linux
+#ifdef HAVE_DIRECT_IO
    static const capacity_t DIRECTIO_BUFFER_SIZE_INCREMENT = 1024LLU;
 #endif
 
@@ -52,8 +51,7 @@ protected:
    };
 
 public:
-   Transfer(Log &logger,
-            int fd, 
+   Transfer(int fd, 
             unsigned char *buffer, 
             capacity_t maxBufferSize,
             capacity_t id);
@@ -72,7 +70,6 @@ private:
    Transfer(const Transfer&); // Hide copy constructor.
 
 protected:
-   Log &mLogger;
    int mFd;
    unsigned char *mBuffer;
    capacity_t mMaxBufferSize;

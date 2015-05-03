@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-using namespace std;
+namespace std {} using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -32,11 +32,11 @@ using namespace std;
 #include "GarbageTransfer.h"
 #include "NumbersTransfer.h"
 #include "RandomTransfer.h"
-#include "ZerosTransfer.h"
+#include "BytePatternTransfer.h"
 
 ///////////////////  TransferFactory::createInstance()  ///////////////////////
-Transfer *TransferFactory::createInstance(Log &logger,
-                                          Job::pattern_t pattern,
+Transfer *TransferFactory::createInstance(Job::pattern_t pattern,
+														unsigned char userPattern,
                                           int fd, 
                                           unsigned char *buffer, 
                                           capacity_t maxBufferSize,
@@ -47,33 +47,51 @@ Transfer *TransferFactory::createInstance(Log &logger,
    switch (pattern)
    {
    case Job::PATTERN_NONE:
-      transferPtr = new GarbageTransfer(logger,
-                                        fd, 
+      transferPtr = new GarbageTransfer(fd, 
                                         buffer, 
                                         maxBufferSize, 
                                         id);
       break;
    case Job::PATTERN_ZEROS:
-      transferPtr = new ZerosTransfer(logger,
-                                      fd, 
-                                      buffer, 
-                                      maxBufferSize, 
-                                      id);
+      transferPtr = new BytePatternTransfer(fd, 
+														  buffer, 
+														  maxBufferSize, 
+														  id,
+			                                   0x00);
+      break;
+   case Job::PATTERN_ONES:
+      transferPtr = new BytePatternTransfer(fd, 
+														  buffer, 
+														  maxBufferSize, 
+														  id,
+			                                   0xff);
+		break;
+	case Job::PATTERN_ALTERNATING:
+		transferPtr = new BytePatternTransfer(fd, 
+                                            buffer, 
+                                            maxBufferSize, 
+                                            id,
+                                            0xaa);
       break;
    case Job::PATTERN_TRANSFER_NUMBERS:
-      transferPtr = new NumbersTransfer(logger,
-                                        fd, 
+      transferPtr = new NumbersTransfer(fd, 
                                         buffer, 
                                         maxBufferSize, 
                                         id);
       break;
    case Job::PATTERN_RANDOM:
-      transferPtr = new RandomTransfer(logger,
-                                       fd, 
+      transferPtr = new RandomTransfer(fd, 
                                        buffer, 
                                        maxBufferSize, 
                                        id, 
                                        seed);
+      break;
+   case Job::PATTERN_USER_DEFINED:
+      transferPtr = new BytePatternTransfer(fd, 
+                                            buffer, 
+                                            maxBufferSize, 
+                                            id,
+                                            userPattern);
       break;
    default:
       transferPtr = 0;

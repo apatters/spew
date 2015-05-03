@@ -3,12 +3,12 @@
 man_MANS = spew.1
 BUILT_SOURCES = spew.1
 CLEANFILES = spew.1
-EXTRA_DIST = spew.1.in
+EXTRA_DIST = spew.1.in spew.1.include
 
 
-spew.1:		spew.1.in
+spew.1:		spew.1.in spew.1.include
 	sed -e 's!SPEW_VERSION!$(VERSION)!' \
-	    -e 's!SYSCONFDIR!$(sysconfdir)!' $^ >$@
+	    -e 's!SYSCONFDIR!$(sysconfdir)!' $< >$@
 
 install-data-am:	install-man install-man-local
 
