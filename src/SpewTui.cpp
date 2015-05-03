@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -34,6 +34,7 @@ namespace std {} using namespace std;
 #include <signal.h>
 
 #include "common.h"
+#include "TimeHack.h"
 #include "Tui.h"
 #include "SpewTui.h"
 #include "SpewTuiWindow.h"
@@ -217,8 +218,8 @@ int SpewTui::resize()
 }
 
 
-//////////////////////////  SpewTui::getCurrentNumHackRows()  /////////////////
-unsigned int SpewTui::getCurrentNumHackRows() const
+//////////////////////////  SpewTui::getCurrentProgressRows()  ////////////////
+unsigned int SpewTui::getCurrentProgressRows() const
 {
    if (mShowProgress)
       return mProgressWindow->getCurrentNumHackRows();
@@ -227,26 +228,12 @@ unsigned int SpewTui::getCurrentNumHackRows() const
 }
 
 
-////////////////  SpewTui::getCurrentNumVerticalHacks()  //////////////////////
-unsigned int SpewTui::getCurrentNumVerticalHacks() const 
-{
-   return this->getCurrentNumHackRows();
-} 
-
-
-//////////////////////////  SpewTui::getCurrentNumHackColumns()  //////////////
-unsigned int SpewTui::getCurrentNumHackColumns() const
+//////////////////////////  SpewTui::getCurrentProgressColumns()  /////////////
+unsigned int SpewTui::getCurrentProgressColumns() const
 {
    if (mShowProgress)
       return mProgressWindow->getCurrentNumHackColumns();
    return 1;
-}
-
-
-////////////////  SpewTui::getCurrentNumHorizontalHacks()  ////////////////////
-unsigned int SpewTui::getCurrentNumHorizontalHacks() const 
-{
-   return this->getCurrentNumHackColumns();
 }
 
 
@@ -328,8 +315,8 @@ void SpewTui::noEndHack()
 }
 
 
-//////////////////////////  SpewTui::nextHackRow()  ///////////////////////////
-void SpewTui::nextHackRow()
+//////////////////////////  SpewTui::nextProgressRow()  ///////////////////////
+void SpewTui::nextProgressRow()
 {
    if (!mShowProgress)
       return;
@@ -341,58 +328,52 @@ void SpewTui::nextHackRow()
 
 
 ////////////////////  SpewTui::intermediateStatistics()  //////////////////////
-void SpewTui::intermediateStatistics(capacity_t hackRowBytesTransferred,
-                                     const TimeHack& hackRowTransferTime,
-                                     capacity_t jobBytesTransferred,
-                                     const TimeHack& jobTransferTime,
-                                     capacity_t bytesInJob,
-                                     capacity_t totalBytesRead,
-                                     const TimeHack& totalReadTransferTime,
-                                     capacity_t totalBytesWritten,
-                                     const TimeHack& totalWriteTransferTime,
-                                     const TimeHack& totalRunTime)
+void SpewTui::intermediateStatistics(const JobStatistics *jobStats,
+                                     const CumulativeStatistics *cumStats,
+                                     const TimeHack& currentTime,
+                                     const TimeHack& startTime)
 {
-   long double percentage = (long double)jobBytesTransferred/(long double)bytesInJob*100.0;
+   long double percentage = (long double)jobStats->getJobBytesTransferred()/(long double)jobStats->getBytesInJob()*100.0;
+   TimeHack progressRowTransferTime = jobStats->getIntervalEndTime() - jobStats->getIntervalStartTime();
+   TimeHack runTime(currentTime);
+   runTime -= startTime;
+   TimeHack jobTransferTime(currentTime);
+   jobTransferTime -= jobStats->getJobStartTime();
 
    if (mShowProgress)
    {
       mProgressWindow->currentTransferPercentage(percentage);
-      mProgressWindow->currentTransferRate(hackRowBytesTransferred, 
-                                           hackRowTransferTime);
+      mProgressWindow->currentTransferRate(jobStats->getIntervalBytesTransferred(), progressRowTransferTime.getTime());
       mProgressWindow->refresh();
    }
 
-   mStatsWindow->setJobBytesTransferred(jobBytesTransferred);
+   mStatsWindow->setJobBytesTransferred(jobStats->getJobBytesTransferred());
    mStatsWindow->setJobTransferTime(jobTransferTime);
-   mStatsWindow->setBytesInJob(bytesInJob);
-   mStatsWindow->setTotalBytesRead(totalBytesRead);
-   mStatsWindow->setTotalReadTransferTime(totalReadTransferTime);
-   mStatsWindow->setTotalBytesWritten(totalBytesWritten);
-   mStatsWindow->setTotalWriteTransferTime(totalWriteTransferTime);
-   mStatsWindow->setTotalRunTime(totalRunTime);
+   mStatsWindow->setBytesInJob(jobStats->getBytesInJob());
+   mStatsWindow->setTotalBytesRead(cumStats->getTotalBytesRead());
+   mStatsWindow->setTotalReadTransferTime(cumStats->getTotalReadTransferTime());
+   mStatsWindow->setTotalBytesWritten(cumStats->getTotalBytesWritten());
+   mStatsWindow->setTotalWriteTransferTime(cumStats->getTotalWriteTransferTime());
+   mStatsWindow->setTotalRunTime(runTime);
    mStatsWindow->refresh();
 
    this->checkKeyboard();
 }
 
 /////////////////////  SpewTui::cumulativeStatistics() ////////////////////////
-void SpewTui::cumulativeStatistics(capacity_t jobBytesTransferred,
-                                   const TimeHack& jobTransferTime,
-                                   capacity_t jobOps,
-                                   capacity_t totalBytesRead,
-                                   const TimeHack& totalReadTransferTime,
-                                   capacity_t totalReadOps,
-                                   capacity_t totalBytesWritten,
-                                   const TimeHack& totalWriteTransferTime,
-                                   capacity_t totalWriteOps,
+void SpewTui::cumulativeStatistics(const JobStatistics *jobStats,
+                                   const CumulativeStatistics *cumStats,
                                    const TimeHack& totalRunTime)
 {
-   mStatsWindow->setJobBytesTransferred(jobBytesTransferred);
+
+   TimeHack jobTransferTime = jobStats->getJobEndTime() - jobStats->getJobStartTime();
+
+   mStatsWindow->setJobBytesTransferred(jobStats->getJobBytesTransferred());
    mStatsWindow->setJobTransferTime(jobTransferTime);
-   mStatsWindow->setTotalBytesRead(totalBytesRead);
-   mStatsWindow->setTotalReadTransferTime(totalReadTransferTime);
-   mStatsWindow->setTotalBytesWritten(totalBytesWritten);
-   mStatsWindow->setTotalWriteTransferTime(totalWriteTransferTime);
+   mStatsWindow->setTotalBytesRead(cumStats->getTotalBytesRead());
+   mStatsWindow->setTotalReadTransferTime(cumStats->getTotalReadTransferTime());
+   mStatsWindow->setTotalBytesWritten(cumStats->getTotalBytesWritten());
+   mStatsWindow->setTotalWriteTransferTime(cumStats->getTotalWriteTransferTime());
    mStatsWindow->setTotalRunTime(totalRunTime);
    mStatsWindow->refresh();
 
@@ -401,8 +382,10 @@ void SpewTui::cumulativeStatistics(capacity_t jobBytesTransferred,
 
 
 //////////////////////////  SpewTui::startRun()  //////////////////////////////
-void SpewTui::startRun()
+void SpewTui::startRun(const TimeHack &startTime)
 {
+   SpewDisplay::startRun(startTime);
+
    mStatusWindow->startRun();
    mStatsWindow->startRun();
    if (mShowProgress)

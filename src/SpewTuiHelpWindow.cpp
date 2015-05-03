@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -30,7 +30,7 @@ namespace std {} using namespace std;
 #include <config.h>
 #endif
 
-#include <cstring>
+#include <string.h>
 
 #include "common.h"
 #include "SpewTuiWindow.h"

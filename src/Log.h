@@ -25,9 +25,18 @@
 
 #include <stdio.h>
 #include <string>
+#include <list>
 
 class Log
 {
+#ifdef USE_THREADS
+protected:
+   int startThread();
+   int stopThread();
+private:
+   static void *doWork(void *pthis);
+#endif // USE_THREADS
+
 public:
    // Output devices.  Or these together to send note() and error() output
    // to various log devices.
@@ -58,22 +67,37 @@ public:
    
    ~Log();
 
-private:
-   Log(const Log&); // Hide copy constructor.
-   
-   void logSeparatorNote(const char *timestamp, const char *note) const;
+protected: 
+   string logSeparatorNote(const char *timestamp, const char *note) const;
    string& justify(string& str, 
                    const string& leader = "", 
                    const string &hangingIndent = "",
                    const string &follower = "") const;
-   char *timestamp(char *timestamp) const;
+   string timestamp() const;
+   void submitWork(unsigned int outputDevices, const string& str) const;
 
+private:
+   Log(const Log&); // Hide copy constructor.
+  
 protected:
    string mLogfilePath;
    FILE *mDisplayStdoutFile;
    FILE *mDisplayStderrFile;
    FILE *mLogStdoutFile;
    FILE *mLogStderrFile;
+   list<string> mBuffer;
+
+#ifdef USE_THREADS
+   pthread_t *mThread;
+   mutable pthread_mutex_t mMsgQueueMutex;
+   mutable pthread_cond_t mMsgQueueNotEmpty;
+   mutable bool mShutdown;                   // Protect with mutex
+   mutable list<string> mDisplayStdoutQueue; // Protect with mutex
+   mutable list<string> mDisplayStderrQueue; // Protect with mutex
+   mutable list<string> mLogStdoutQueue;     // Protect with mutex
+   mutable list<string> mLogStderrQueue;     // Protect with mutex
+#endif // USE_THREADS
+
 };
 
 #endif // LOG_H

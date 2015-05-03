@@ -36,23 +36,29 @@
 #define PTR_ALIGN(Ptr, M) ((Ptr) \
                            + ROUND_UP_OFFSET ((char *)(Ptr) - (char *)0, (M)))
 
-#ifndef max
-#define max(X,Y) ((X) >= (Y) ? (X) : (Y))
+#ifndef MAX
+#define MAX(X,Y) ((X) >= (Y) ? (X) : (Y))
 #endif
+
 
 #define STRINGIFY(s) #s
 #define QUOTE(s) STRINGIFY(s)
+
+
+#define SPEW_TRACE()																	\
+	do { fprintf(stderr, "%s:%s:%d\n", __FILE__, __FUNCTION__, __LINE__); } while (0)
+
 
 //////////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Typedefs  ///////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 
-typedef enum 
+typedef enum
 {
    VERBOSITY_NONE, 
    VERBOSITY_SHORT, 
    VERBOSITY_LONG,
-} Verbosity_t;
+}  Verbosity_t;
 
 typedef enum
 {
@@ -103,14 +109,13 @@ static const unsigned int DEFAULT_SCREEN_COLUMNS = 79;
 static const unsigned int DEFAULT_SCREEN_ROWS = 24;
 static const unsigned int DEFAULT_SCREEN_COLUMNS = 80;
 #endif
+static const unsigned int TMP_MAX_STR_SIZE = 256;
 
 
 //////////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Functions  //////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
-#if !HAVE_BASENAME
-const char *basename(char *path);
-#endif
+const char *base_name(char *path);
 string strPrintf(const char *fmt, ...);
 string strSignal(int sig);
 string strError(int error_number);
@@ -118,5 +123,8 @@ bool is_mounted(const char *path);
 long double convertCapacity(long double bytes, Units_t units);
 const char *getTransferRateUnitsStr(Units_t units);
 void localTime(const time_t *timep, struct tm *result);
+int strPrintf(string &str, const char *format, ...);
+int strnPrintf(string &str, const char *format, ...);
+
 
 #endif // COMMON_H

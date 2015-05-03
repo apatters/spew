@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -35,7 +35,7 @@ namespace std {} using namespace std;
 #include "GarbageTransfer.h"
 #include "NumbersTransfer.h"
 #include "RandomTransfer.h"
-#include "BytePatternTransfer.h"
+#include "ZerosTransfer.h"
 #include "TransferInfo.h"
 #include "TransferInfoList.h"
 #include "TransferInfoListFactory.h"
@@ -50,7 +50,6 @@ Job::Job(Log &logger,
          capacity_t maxBufferSize,
          TransferInfoList::buffer_size_method_t bufferSizeMethod,
          pattern_t pattern,
-			unsigned char userPattern,
          TransferInfoList::fill_method_t fillMethod,
          io_method_t ioMethod,
          u32_t seed,
@@ -64,7 +63,6 @@ Job::Job(Log &logger,
    mMaxBufferSize(maxBufferSize),
    mBufferSizeMethod(bufferSizeMethod),
    mPattern(pattern),
-	mUserPattern(userPattern),
    mFillMethod(fillMethod),
    mIOMethod(ioMethod),
    mSeed(seed),
@@ -74,10 +72,7 @@ Job::Job(Log &logger,
    mRealBuffer = (unsigned char *)NULL;
    mBuffer = (unsigned char *)NULL;
    mLastErrorMsg = "";
-   mJobBytesTransferred = 0;
-   mHackBytesTransferred = 0;
-   mRunningHack = false;
-   mNumTransfersWithDataIntegrityErrors = 0;
+   mRunningInterval = false;
 }
 
 
@@ -95,6 +90,14 @@ int Job::init()
       return EXIT_ERROR_MEMORY_ALLOC;
    }
    mBuffer = PTR_ALIGN(mRealBuffer, pageSize);
+
+   // Initialize statistics.
+   mStats = new JobStatisticsReadWrite();
+   if (!mStats)
+   {
+      mLastErrorMsg = "Cannot allocate memory.\n";
+      return EXIT_ERROR_MEMORY_ALLOC;
+   }
 
    // Initialize the list of transfers.
    mTransferInfoList = TransferInfoListFactory::createInstance(
@@ -131,7 +134,11 @@ capacity_t Job::getTotalNumberOfTransfers() const
 /////////////////////////  Job::startJob()  ///////////////////////////////////
 int Job::startJob()
 {
-   mJobBytesTransferred = 0;
+   int rtn;
+
+   mStats->init();
+   mStats->setBytesInJob(mTransferSize);
+
    return EXIT_OK;
 }
 
@@ -139,6 +146,8 @@ int Job::startJob()
 /////////////////////////  Job::finishJob()  //////////////////////////////////
 int Job::finishJob()
 {
+   int rtn = EXIT_OK;
+
    if (mRealBuffer != (unsigned char*)NULL)
    {
       free(mRealBuffer);
@@ -146,35 +155,35 @@ int Job::finishJob()
       mBuffer = (unsigned char*)NULL;
    }
 
-   return EXIT_OK;
+   return rtn;
 }
 
 
 /////////////////////////  Job::setJobStartTime()  ////////////////////////////
 void Job::setJobStartTime()
 {
-   mJobStartTime.setTimeNow();}
-
+   mStats->setJobStartTime();
+}
 
 
 /////////////////////////  Job::getJobStartTime()  ////////////////////////////
 TimeHack::timehack_t Job::getJobStartTime() const
 {
-   return mJobStartTime.getTime();
+   return mStats->getJobStartTime().getTime();
 }
 
 
 /////////////////////////  Job::setJobEndTime()  //////////////////////////////
 void Job::setJobEndTime()
 {
-   mJobEndTime.setTimeNow();
+   mStats->setJobEndTime();
 }
 
 
 /////////////////////////  Job::getJobEndTime()  //////////////////////////////
 TimeHack::timehack_t Job::getJobEndTime() const
 {
-   return mJobEndTime.getTime();
+   return mStats->getJobEndTime().getTime();
 }
 
 
@@ -188,69 +197,69 @@ TimeHack::timehack_t Job::getJobElapsedTime() const
 /////////////////////////  Job::getTotalJobTime()  ////////////////////////////
 TimeHack::timehack_t Job::getTotalJobTime() const
 {
-   return mJobEndTime.getTime() - mJobStartTime.getTime();
+   return mStats->getJobEndTime().getTime() - mStats->getJobStartTime().getTime();
 }
 
 
-/////////////////////////  Job::setHackStartTime()  ///////////////////////////
-void Job::setHackStartTime()
+/////////////////////////  Job::setIntervalStartTime()  ///////////////////////
+void Job::setIntervalStartTime()
 {
-   mHackStartTime.setTimeNow();
+   mStats->setIntervalStartTime();
 }
 
 
-////////////////////////  Job::getHackStartTime()  ////////////////////////////
-TimeHack::timehack_t Job::getHackStartTime() const
+////////////////////////  Job::getIntervalStartTime()  ////////////////////////
+TimeHack::timehack_t Job::getIntervalStartTime() const
 {
-   return mHackStartTime.getTime();
+   return mStats->getIntervalStartTime().getTime();
 }
 
 
-/////////////////////////  Job::setHackEndTime()  /////////////////////////////
-void Job::setHackEndTime()
+/////////////////////////  Job::setIntervalEndTime()  /////////////////////////
+void Job::setIntervalEndTime()
 {
-   mHackEndTime.setTimeNow();
+   mStats->setIntervalEndTime();
 }
 
 
-/////////////////////////  Job::getHackEndTime()  /////////////////////////////
-TimeHack::timehack_t Job::getHackEndTime() const
+/////////////////////////  Job::getIntervalEndTime()  /////////////////////////
+TimeHack::timehack_t Job::getIntervalEndTime() const
 {
-   return mHackEndTime.getTime();
+   return mStats->getIntervalEndTime().getTime();
 }
 
 
-/////////////////////////  Job::getHackElapsedTime()  /////////////////////////
-TimeHack::timehack_t Job::getHackElapsedTime() const
+/////////////////////////  Job::getIntervalElapsedTime()  /////////////////////
+TimeHack::timehack_t Job::getIntervalElapsedTime() const
 {
 
-   return TimeHack::getCurrentTime() - this->getHackStartTime();
+   return TimeHack::getCurrentTime() - this->getIntervalStartTime();
 }
 
 
-/////////////////////////  Job::getTotalHackTime()  ///////////////////////////
-TimeHack::timehack_t Job::getTotalHackTime() const
+/////////////////////////  Job::getTotalIntervalTime()  ///////////////////////
+TimeHack::timehack_t Job::getTotalIntervalTime() const
 {
-   return mHackEndTime.getTime() - mHackStartTime.getTime();
+   return mStats->getIntervalEndTime().getTime() - mStats->getIntervalStartTime().getTime();
 }
 
 
-/////////////////////////  Job::startHack()  //////////////////////////////////
-int Job::startHack()
+/////////////////////////  Job::startInterval()  //////////////////////////////
+int Job::startInterval()
 {
-   mRunningHack = true;
-   mHackBytesTransferred = 0LLU;
-   this->setHackStartTime();
+   mRunningInterval = true;
+   mStats->setIntervalBytesTransferred(0);
+   this->setIntervalStartTime();
 
    return EXIT_OK;
 }
 
 
-/////////////////////////  Job::endHack()  ////////////////////////////////////
-int Job::endHack()
+/////////////////////////  Job::endInterval()  ////////////////////////////////
+int Job::endInterval()
 {
-   this->setHackEndTime();
-   mRunningHack = false;
+   this->setIntervalEndTime();
+   mRunningInterval = false;
 
    return EXIT_OK;
 }
@@ -259,28 +268,79 @@ int Job::endHack()
 /////////////////////////  Job::setTransferStartTime()  ///////////////////////
 void Job::setTransferStartTime()
 {
-   mTransferStartTime.setTimeNow();
+   mStats->setTransferStartTime();
 }
 
 
 ////////////////////////  Job::getTransferStartTime()  ////////////////////////
 TimeHack::timehack_t Job::getTransferStartTime() const
 {
-   return mTransferStartTime.getTime();
+   return mStats->getTransferStartTime().getTime();
 }
 
 
 /////////////////////////  Job::setTransferEndTime()  /////////////////////////
 void Job::setTransferEndTime()
 {
-   mTransferEndTime.setTimeNow();
+   mStats->setTransferEndTime();
 }
 
 
 /////////////////////////  Job::getTransferEndTime()  /////////////////////////
 TimeHack::timehack_t Job::getTransferEndTime() const
 {
-   return mTransferEndTime.getTime();
+   return mStats->getTransferEndTime().getTime();
+}
+
+
+/////////////////////////  Job::runTransfers()  ///////////////////////////////
+int Job::runTransfers(capacity_t numTransfers, bool continueAfterError)
+{
+   this->setTransferStartTime();
+   mStats->setTransferBytesTransferred(0);
+   int exitCode = EXIT_OK;
+   for (capacity_t i = 0LLU; i < numTransfers; i++)
+   {
+      const TransferInfo *nextTransfer = mTransferInfoList->next();
+      if (!nextTransfer)
+      {
+         mLastErrorMsg += "Fatal internal error - no transfers left to process.";
+         return EXIT_ERROR_ILLEGAL_OPERATION;
+      }
+      int ret = mTransfer->io(*nextTransfer, mLastErrorMsg);
+      capacity_t transferSize = nextTransfer->getSize();
+      switch (ret)
+      {
+      case EXIT_OK:
+         mStats->addToJobBytesTransferred(transferSize);
+         mStats->addToTransferBytesTransferred(transferSize);
+         if (mRunningInterval)
+            mStats->addToIntervalBytesTransferred(transferSize);
+         break;
+      case EXIT_ERROR_DATA_INTEGRITY:
+         exitCode = EXIT_ERROR_DATA_INTEGRITY;
+         if (continueAfterError)
+         {
+            mStats->incNumTransfersWithDataIntegrityErrors();
+            mLogger.logError(mLastErrorMsg.c_str());
+         }
+         else
+         {
+            mLastErrorMsg += "More data integrity errors may exist in other parts of the file.";
+            return EXIT_ERROR_DATA_INTEGRITY;
+         }
+         break;
+      default:
+         exitCode = ret;
+         return exitCode;
+         break;
+      }
+   }
+   this->setTransferEndTime();
+   if (mStats->getNumTransfersWithDataIntegrityErrors())
+      return EXIT_ERROR_DATA_INTEGRITY;
+   else
+      return exitCode;
 }
 
 
@@ -294,5 +354,6 @@ Job::~Job()
       mBuffer = (unsigned char*)NULL;
    }
    delete mTransfer;
+   delete mStats;
    delete mTransferInfoList;
 }

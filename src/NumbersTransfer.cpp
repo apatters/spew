@@ -20,26 +20,28 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <cstring>
 
 #include "common.h"
 #include "Transfer.h"
 #include "NumbersTransfer.h"
 
 //////////////////////////  NumbersTransfer::NumbersTransfer()  ///////////////
-NumbersTransfer::NumbersTransfer(int fd, 
+NumbersTransfer::NumbersTransfer(Log &logger,
+                                 int fd, 
                                  unsigned char *buffer, 
                                  capacity_t bufferSize,
-                                 capacity_t id) : 
-   Transfer(fd, buffer, bufferSize, id)
+                                 capacity_t id,
+											IoDirection_t direction) : 
+   Transfer(logger, fd, buffer, bufferSize, id, direction)
 {
 }
 
@@ -95,8 +97,9 @@ int NumbersTransfer::read(const TransferInfo &transInfo, string &errorMsg)
          if (inErrorRange)
          {
             endingErrorRange = fileOffset + (i * datum_size) - 1;
-            errors += strPrintf("\t%lld - %lld\n", 
-                                startingErrorRange, endingErrorRange);
+            errors += strPrintf("\t%lld - %lld\n",
+               startingErrorRange + (bufferSize * transferNumber), 
+               endingErrorRange  + (bufferSize * transferNumber));
             inErrorRange = false;
          }
       }
@@ -117,8 +120,8 @@ int NumbersTransfer::read(const TransferInfo &transInfo, string &errorMsg)
    {
       endingErrorRange = fileOffset + bufferSize - 1;
       errors += strPrintf("\t%lld - %lld\n", 
-                          startingErrorRange,
-                          endingErrorRange);
+                          startingErrorRange + (bufferSize * transferNumber),
+                          endingErrorRange + (bufferSize * transferNumber));
 
    }
    if (errorsFound > 0)

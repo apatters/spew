@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -34,14 +34,18 @@ namespace std {} using namespace std;
 #include "Transfer.h"
 
 //////////////////////////  Transfer::Transfer()  /////////////////////////////
-Transfer::Transfer(int fd, 
+Transfer::Transfer(Log &logger,
+                   int fd, 
                    unsigned char *buffer, 
                    capacity_t maxBufferSize,
-                   capacity_t id) : 
+                   capacity_t id,
+						 IoDirection_t direction) : 
+   mLogger(logger),
    mFd(fd),
    mBuffer(buffer), 
    mMaxBufferSize(maxBufferSize),
-   mId(id)
+   mId(id),
+	mIoDirection(direction)
       
 {
    mCurrentOffset = 0;
@@ -72,7 +76,7 @@ int Transfer::read(const TransferInfo &transInfo,  string &errorMsg)
 
       if ((capacity_t)count < remaining)
       {
-         errorMsg = strPrintf("Read underrun -- read only %llu bytes of %llu bytes at offset %llu during transfer %llu.\n", (capacity_t)count, bufferSize,  offset + bufferSize - remaining, transferNumber); 
+         mLogger.logNote("Read underrun -- read only %llu bytes of %llu bytes at offset %llu during transfer %llu.\n", (capacity_t)count, bufferSize,  offset + bufferSize - remaining, transferNumber); 
       }
       remaining -= count;
    }
@@ -105,12 +109,28 @@ int Transfer::write(const TransferInfo &transInfo, string &errorMsg)
 
       if ((capacity_t)count < remaining)
       {
-         errorMsg = strPrintf("Write underrun -- wrote only %llu bytes of %llu bytes at offset %llu during transfer %llu.\n", (capacity_t)count, bufferSize,  offset + bufferSize - remaining, transferNumber); 
+         mLogger.logNote("Write underrun -- wrote only %llu bytes of %llu bytes at offset %llu during transfer %llu.\n", (capacity_t)count, bufferSize,  offset + bufferSize - remaining, transferNumber); 
       }
       remaining -= count;
    }
 
    return bufferSize - remaining;
+}
+
+
+//////////////////////////  Transfer::io()  //////////////////////////////////
+int Transfer::io(const TransferInfo &transInfo, string &errorMsg)
+{
+	int rtn;
+	switch (mIoDirection)
+	{
+	case READING:
+		rtn = this->read(transInfo, errorMsg);
+		break;
+	case WRITING:
+		rtn = this->write(transInfo, errorMsg);
+	}
+	return rtn;
 }
 
 

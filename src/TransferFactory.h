@@ -34,13 +34,14 @@ class TransferFactory
 public:
 
 public:
-   static Transfer *createInstance(Job::pattern_t pattern,
-											  unsigned char userPattern,
+   static Transfer *createInstance(Log &logger,
+                                   Job::pattern_t pattern,
                                    int fd, 
                                    unsigned char *buffer, 
                                    capacity_t maxBufferSize,
                                    capacity_t id,
-                                   u64_t seed);
+                                   u64_t seed,
+											  IoDirection_t direction);
              
 private:
    // Hide default methods.

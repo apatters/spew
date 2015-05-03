@@ -27,16 +27,19 @@
 
 #include "common.h"
 #include "Job.h"
+#include "Log.h"
 #include "Transfer.h"
 
 
 class GarbageTransfer: public Transfer
 {
 public:
-   GarbageTransfer(int fd, 
+   GarbageTransfer(Log &logger,
+                   int fd, 
                    unsigned char *buffer, 
                    capacity_t bufferSize,
-                   capacity_t id);
+                   capacity_t id,
+						 IoDirection_t direction);
              
    virtual int read(const TransferInfo &tranInfo, string &errorMsg);
    virtual int write(const TransferInfo &tranInfo, string &errorMsg);

@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -47,7 +47,6 @@ ReadJob::ReadJob(Log &logger,
                  capacity_t maxBufferSize,
                  TransferInfoList::buffer_size_method_t bufferSizeMethod,
                  pattern_t pattern,
-					  unsigned char userPattern,
                  TransferInfoList::fill_method_t fillMethod,
                  io_method_t ioMethod,
                  u32_t seed,
@@ -60,7 +59,6 @@ ReadJob::ReadJob(Log &logger,
          maxBufferSize,
          bufferSizeMethod,
          pattern,
-			userPattern,
          fillMethod,
          ioMethod,
          seed,
@@ -100,13 +98,14 @@ int ReadJob::startJob()
       return EXIT_ERROR_SYSTEM;
    }
 
-   mTransfer = TransferFactory::createInstance(mPattern,
-															  mUserPattern,
+   mTransfer = TransferFactory::createInstance(mLogger,
+                                               mPattern,
                                                mFd,
                                                mBuffer, 
                                                mMaxBufferSize, 
                                                mJobId, 
-                                               mSeed);
+                                               mSeed,
+															  this->getIoDirection());
    if (!mTransfer)
    {
       mLastErrorMsg = strPrintf("Could not allocate memory for transfer.\n"); 
@@ -131,60 +130,7 @@ int ReadJob::finishJob()
 }
 
 
-///////////////////////////  ReadJob::runTransfers()  ////////////////////////
-int ReadJob::runTransfers(capacity_t numTransfers, bool continueAfterError)
+///////////////////////////  ReadJob::~ReadJob()  /////////////////////////////
+ReadJob::~ReadJob()
 {
-
-   this->setTransferStartTime();
-   mBytesTransferred = 0;
-   mNumTransfersWithDataIntegrityErrors = 0;
-   mLastErrorMsg = "";
-   int exitCode = EXIT_OK;
-   for (capacity_t i = 0LLU; i < numTransfers; i++)
-   {
-      const TransferInfo *nextTransfer = mTransferInfoList->next();
-      if (!nextTransfer)
-      {
-         mLastErrorMsg += "Fatal internal error - no transfers left to process.";
-         return EXIT_ERROR_ILLEGAL_OPERATION;
-      }
-      int ret = mTransfer->read(*nextTransfer, mLastErrorMsg);
-      capacity_t transferSize = nextTransfer->getSize();
-      switch (ret)
-      {
-      case EXIT_OK:
-         mJobBytesTransferred += transferSize;
-         mBytesTransferred += transferSize;
-         if (mRunningHack)
-            mHackBytesTransferred += transferSize;
-         break;
-      case EXIT_ERROR_DATA_INTEGRITY:
-         mJobBytesTransferred += transferSize;
-         mBytesTransferred += transferSize;
-         if (mRunningHack)
-            mHackBytesTransferred += transferSize;
-         exitCode = EXIT_ERROR_DATA_INTEGRITY;
-         if (continueAfterError)
-         {
-            mLogger.logNote(mLastErrorMsg.c_str());
-            mLastErrorMsg = "";
-            mNumTransfersWithDataIntegrityErrors++;
-         }
-         else
-         {
-            mLastErrorMsg += "More data integrity errors may exist in other parts of the file.";
-            return EXIT_ERROR_DATA_INTEGRITY;
-         }
-         break;
-      default:
-         exitCode = ret;
-         return exitCode;
-         break;
-      }
-   }
-   this->setTransferEndTime();
-   if (mNumTransfersWithDataIntegrityErrors)
-      return EXIT_ERROR_DATA_INTEGRITY;
-   else
-      return exitCode;
 }

@@ -20,17 +20,16 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #include <stdio.h>
+#include <string.h>
 #include <stdarg.h>
 #include <ncurses.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
-#include <cstring>
 
 #include "common.h"
 #include "SpewTui.h"
@@ -78,6 +77,17 @@ SpewTuiProgressWindow::SpewTuiProgressWindow(const SpewTui *spewTui,
 int SpewTuiProgressWindow::show()
 {
    SpewTuiWindow::show();
+
+	const vector<SpewProgressRow> &progRows = this->mSpewTui->getProgressRows();
+	unsigned int oldRows = progRows.size();
+
+	if (oldRows)
+	{
+		for (unsigned int i = 0; i < oldRows - 1; i++)
+		{
+			mvwprintw(mWindow, i, 0, "%u:%u, %d:%d", mWindowStartY, mWindowStartX, oldRows, i);
+		}
+	}
 
    this->refresh();
    return 0;

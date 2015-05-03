@@ -28,6 +28,7 @@
 
 #include "common.h"
 #include "Log.h"
+#include "JobStatisticsReadWrite.h"
 #include "TimeHack.h"
 #include "Transfer.h"
 #include "TransferInfo.h"
@@ -38,12 +39,8 @@ class Job
 public:
    typedef enum {PATTERN_NONE,
                  PATTERN_ZEROS, 
-                 PATTERN_ONES, 
-                 PATTERN_ALTERNATING, 
                  PATTERN_TRANSFER_NUMBERS, 
-                 PATTERN_RANDOM,
-                 PATTERN_USER_DEFINED} pattern_t;
-
+                 PATTERN_RANDOM} pattern_t;
    typedef enum {ASYNCH_IO,
                  SYNCH_IO,
                  DIRECT_IO} io_method_t;
@@ -57,7 +54,6 @@ public:
        capacity_t maxBufferSize,
        TransferInfoList::buffer_size_method_t bufferSizeMethod,
        pattern_t pattern,
-		 unsigned char userPattern,
        TransferInfoList::fill_method_t fillMethod,
        io_method_t ioMethod,
        u32_t seed,
@@ -73,12 +69,13 @@ public:
    pattern_t getPattern() const { return mPattern; };
    TransferInfoList::fill_method_t getFillMethod() const { return mFillMethod; };
    io_method_t getIOMethod() const { return mIOMethod; };
-   capacity_t getNumDataIntegrityErrors() { return mNumTransfersWithDataIntegrityErrors; };
+   capacity_t getNumDataIntegrityErrors() { return mStats->getNumTransfersWithDataIntegrityErrors(); };
 
    void setSeed(u32_t seed) { mSeed = seed; };
    u32_t getSeed() const { return mSeed; };
    
    capacity_t getJobId() const { return mJobId; };
+   virtual IoDirection_t getIoDirection() const = 0;
    capacity_t getTotalNumberOfTransfers() const;
 
    void setJobStartTime();
@@ -87,29 +84,30 @@ public:
    TimeHack::timehack_t getJobEndTime() const;
    TimeHack::timehack_t getJobElapsedTime() const;
    TimeHack::timehack_t getTotalJobTime() const;
-   capacity_t getJobBytesTransferred() const { return mJobBytesTransferred; };
+   capacity_t getJobBytesTransferred() const { return mStats->getJobBytesTransferred(); };
    virtual int startJob() = 0;
    virtual int finishJob() = 0;
 
-   void setHackStartTime();
-   TimeHack::timehack_t getHackStartTime() const;
-   void setHackEndTime();
-   TimeHack::timehack_t getHackEndTime() const;
-   TimeHack::timehack_t getHackElapsedTime() const;
-   TimeHack::timehack_t getTotalHackTime() const;
-   capacity_t getHackBytesTransferred() const { return mHackBytesTransferred;};
-   virtual int startHack();
-   virtual int endHack();
+   void setIntervalStartTime();
+   TimeHack::timehack_t getIntervalStartTime() const;
+   void setIntervalEndTime();
+   TimeHack::timehack_t getIntervalEndTime() const;
+   TimeHack::timehack_t getIntervalElapsedTime() const;
+   TimeHack::timehack_t getTotalIntervalTime() const;
+   capacity_t getIntervalBytesTransferred() const { return mStats->getIntervalBytesTransferred(); };
+   virtual int startInterval();
+   virtual int endInterval();
 
    void setTransferStartTime();
    TimeHack::timehack_t getTransferStartTime() const;
    void setTransferEndTime();
    TimeHack::timehack_t getTransferEndTime() const;
-   capacity_t getBytesTransferred() const { return mBytesTransferred; };
+   capacity_t getBytesTransferred() const { return mStats->getTransferBytesTransferred(); };
 
    string getLastErrorMessage() const { return mLastErrorMsg; };
    virtual int runTransfers(capacity_t numTransfers, 
-                            bool continueAfterError) = 0;
+                            bool continueAfterError);
+   const JobStatistics *getStatistics() const { return mStats; };
 
    virtual ~Job();
 
@@ -126,7 +124,6 @@ protected:
    capacity_t mMaxBufferSize;
    TransferInfoList::buffer_size_method_t mBufferSizeMethod;
    pattern_t mPattern;
-	unsigned char mUserPattern;
    TransferInfoList::fill_method_t mFillMethod;     // Random or sequential.
    io_method_t mIOMethod;         // Synchronous or asynchronous.
 
@@ -138,27 +135,21 @@ protected:
    unsigned char *mRealBuffer;    // Memory block to hold buffer.
    unsigned char *mBuffer;        // Page-aligned pointer to mRealBuffer.
 
-   TimeHack mJobStartTime;
-   TimeHack mJobEndTime;
-   capacity_t mJobBytesTransferred;
 
-   bool mRunningHack;
-   TimeHack mHackStartTime;
-   TimeHack mHackEndTime;
-   capacity_t mHackBytesTransferred;
-
-   TimeHack mTransferStartTime;
-   TimeHack mTransferEndTime;
-   capacity_t mBytesTransferred;  // Bytes in last transfer.
-
+   bool mRunningInterval;
    string mLastErrorMsg;          // Holds last reported error message.
-   capacity_t mNumTransfersWithDataIntegrityErrors; // Number of transfers
-                                                    // with any number of data 
-                                                    // integrity errors.
    capacity_t mJobId;  
 
 protected:
+   JobStatisticsReadWrite *mStats;
    TransferInfoList *mTransferInfoList;  
+
+#ifdef USE_THREADS
+   pthread_t *mThread;
+   mutable pthread_mutex_t mQueueMutex;
+   mutable pthread_cond_t mQueueNotEmpty;
+   mutable bool mShutdown;                   // Protect with mutex
+#endif // USE_THREADS
 
 };
 

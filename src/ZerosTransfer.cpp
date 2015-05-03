@@ -20,12 +20,13 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -34,11 +35,13 @@ namespace std {} using namespace std;
 #include "ZerosTransfer.h"
 
 //////////////////////////  ZerosTransfer::ZerosTransfer()  ///////////////////
-ZerosTransfer::ZerosTransfer(int fd, 
+ZerosTransfer::ZerosTransfer(Log &logger,
+                             int fd, 
                              unsigned char *buffer, 
                              capacity_t bufferSize,
-                             pid_t pid) : 
-   Transfer(fd, buffer, bufferSize, pid)
+                             pid_t pid,
+									  IoDirection_t direction) : 
+   Transfer(logger, fd, buffer, bufferSize, pid, direction)
 {
    // Zero out buffer.  This buffer will not change during writes. 
    memset(mBuffer, 0, mMaxBufferSize);

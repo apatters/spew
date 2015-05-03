@@ -8,12 +8,10 @@ Usage: `basename $0` <arch>
 where <arch> is one of:
 
    linux-ia32
-   linux-x86_64
    linux-ia64
    linux-parisc64
-   cygwinxp-ia32
+   cygwinnt-ia32
    hpux11-parisc64
-   hpux11-ia64
 
 EOF
     exit 1
@@ -23,46 +21,31 @@ arch=$1
 cxxflags=""
 ldflags=""
 configopts=--enable-static-link
-cxx=g++
-cc=gcc
 MAKE=make
 TAR=tar
-TAR_FLAGS=-cf
+TAR_FLAGS=-czf
 TAR_EXT=tgz
-COMPRESS=gzip
-COMPRESS_FLAGS=-c
 
 case $arch in
     linux-ia32)
-      libs="-ldl"
-      ;;
-    linux-x86_64)
-      libs="-ldl"
       ;;
     linux-ia64)
-      libs="-ldl"
       ;;
     linux-parisc64)
-      libs="-ldl"
       ;;
-    cygwinxp-ia32)
+    cygwinnt-ia32)
       TAR=zip
       TAR_FLAGS=-r 
       TAR_EXT=zip
       ;;
-     hpux11-ia64)
-     cxx=g++
-     cc=gcc
-     MAKE=gmake
-     TAR=/usr/bin/tar
-     COMPRESS=/usr/local/bin/gzip
-     COMPRESS_FLAGS=-c
-     ldflags="-L /usr/local/lib/hpux32"
-     libs="-lncurses -lpopt -lintl -liconv"
-     cxxflags="-I/usr/local/include -I/usr/local/include/ncurses"
-     ;;
+    hpux11-parisc64)
+      MAKE=gmake
+      TAR=/usr/local/bin/tar
+      ldflags="-L/home/andrew/popt-1.7/.libs -lpthread" 
+      cxxflags="-I/home/andrew/popt-1.7 -I/usr/local/include/ncurses"
+      ;;
     *)
-      echo "error: unknown architecture -- use one of linux-ia32, linux-ia64, linux-parisc64, cygwinxp-ia32, or hpux11-ia64" >&2
+      echo "error: unknown architecture -- use one of linux-ia32, linux-ia64, linux-parisc, winnt, hpux11" >&2
       exit 1
       ;;
 esac
@@ -86,11 +69,9 @@ if [ -f  Makefile ]
 then
   ${MAKE} distclean
 fi
-LIBS="$libs" CC=${cc} CXX=${cxx} CXXFLAGS="$cxxflags" LD=${ld} LDFLAGS="$ldflags" ./configure $configopts
+CXXFLAGS="$cxxflags" LDFLAGS="$ldflags" ./configure $configopts
 ${MAKE} clean all
 ${MAKE} install prefix=${installdir}
-
-( cd ${builddir} && ${TAR} ${TAR_FLAGS} - . | ${COMPRESS} ${COMPRESS_FLAGS} > ${topdir}/${distname}.${TAR_EXT} )
-
+( cd ${builddir} && ${TAR} ${TAR_FLAGS} ${topdir}/${distname}.${TAR_EXT} . )
 rm -rf ${builddir}
 

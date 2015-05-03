@@ -27,6 +27,7 @@
 
 #include "common.h"
 #include "Job.h"
+#include "Log.h"
 #include "Transfer.h"
 #include "TransferInfo.h"
 
@@ -34,10 +35,12 @@
 class ZerosTransfer: public Transfer
 {
 public:
-   ZerosTransfer(int fd, 
+   ZerosTransfer(Log &logger,
+                 int fd, 
                  unsigned char *buffer, 
                  capacity_t bufferSize,
-                 pid_t pid);
+                 pid_t pid,
+					  IoDirection_t direction);
              
    virtual int read(const TransferInfo &transInfo, string &errorMsg);
    virtual int write(const TransferInfo &transInfo, string &errorMsg);

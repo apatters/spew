@@ -27,6 +27,7 @@
 
 #include "common.h"
 #include "Job.h"
+#include "Log.h"
 #include "Transfer.h"
 #include "Random.h"
 
@@ -34,11 +35,13 @@
 class RandomTransfer: public Transfer
 {
 public:
-   RandomTransfer(int fd, 
+   RandomTransfer(Log &logger,
+                  int fd, 
                   unsigned char *buffer, 
                   capacity_t bufferSize,
                   capacity_t id,
-                  u64_t seed);
+                  u32_t seed,
+						IoDirection_t direction);
              
    virtual int read(const TransferInfo &tranInfo, string &errorMsg);
    virtual int write(const TransferInfo &tranInfo, string &errorMsg);

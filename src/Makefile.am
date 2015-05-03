@@ -3,7 +3,7 @@ noinst_LIBRARIES = libcommon.a libtui.a
 
 libcommon_a_SOURCES = \
         common.cpp common.h \
-	TimeHack.cpp TimeHack.h \
+        TimeHack.cpp TimeHack.h \
         Job.cpp Job.h \
         Log.cpp Log.h \
         Random.cpp Random.h \
@@ -14,12 +14,19 @@ libcommon_a_SOURCES = \
         GarbageTransfer.cpp GarbageTransfer.h \
         NumbersTransfer.cpp NumbersTransfer.h \
         RandomTransfer.cpp RandomTransfer.h \
-        BytePatternTransfer.cpp BytePatternTransfer.h \
-	TransferInfo.cpp TransferInfo.h \
-	TransferInfoList.cpp TransferInfoList.h \
-	TransferInfoListFactory.cpp TransferInfoListFactory.h \
-	RandomTransferInfoList.cpp RandomTransferInfoList.h \
-	SequentialTransferInfoList.cpp SequentialTransferInfoList.h
+        ZerosTransfer.cpp ZerosTransfer.h \
+        TransferInfo.cpp TransferInfo.h \
+        TransferInfoList.cpp TransferInfoList.h \
+        TransferInfoListFactory.cpp TransferInfoListFactory.h \
+        RandomTransferInfoList.cpp RandomTransferInfoList.h \
+        SequentialTransferInfoList.cpp SequentialTransferInfoList.h \
+        Statistics.cpp Statistics.h \
+        CumulativeStatistics.cpp CumulativeStatistics.h \
+        CumulativeStatisticsReadOnly.cpp CumulativeStatisticsReadOnly.h \
+        CumulativeStatisticsReadWrite.cpp CumulativeStatisticsReadWrite.h \
+	JobStatistics.cpp JobStatistics.h \
+	JobStatisticsReadOnly.cpp JobStatisticsReadOnly.h \
+	JobStatisticsReadWrite.cpp JobStatisticsReadWrite.h 
 
 libtui_a_SOURCES = \
         Tui.cpp Tui.h
@@ -28,6 +35,7 @@ LDADD = libcommon.a libtui.a
 
 bin_PROGRAMS = spew
 spew_SOURCES = spew.cpp \
+	       SpewProgressRow.cpp SpewProgressRow.h \
                SpewDisplay.cpp SpewDisplay.h \
                SpewConsole.cpp SpewConsole.h \
                SpewTui.cpp SpewTui.h \

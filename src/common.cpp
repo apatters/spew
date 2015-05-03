@@ -20,20 +20,20 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
+#include <string.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <math.h>
 #include <mntent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <cstring>
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #endif
@@ -71,9 +71,8 @@ static const size_t MAX_SPRINTF_CHARS = 2048;
 static const size_t MAX_STR_CHARS = 1024;
 
 
-#if !HAVE_BASENAME
-/////////////////////////  basename()  ///////////////////////////////////////
-const char *basename(char *path)
+/////////////////////////  base_name()  ///////////////////////////////////////
+const char *base_name(char *path)
 {
    char *name = strrchr(path, '/');
    if (name == NULL)
@@ -81,7 +80,6 @@ const char *basename(char *path)
    else
       return name + 1;
 }
-#endif
 
 
 #ifdef HAVE_MOUNT_CHECK
@@ -190,4 +188,69 @@ void localTime(const time_t *timep, struct tm *result)
    currentBrokenDownTimePtr = localtime_r(&currentTime);
 #endif
    memcpy(result, currentBrokenDownTimePtr, sizeof(struct tm));
+}
+
+
+/////////////////////////  strPrintf()  ///////////////////////////////////////
+int strPrintf(string &str, const char *format, ...)
+{
+
+   // Code "leveraged" from Linux printf(3) man-page.
+
+   int n;
+   int size = TMP_MAX_STR_SIZE;
+   char *p, *np;
+   va_list ap;
+
+   if ((p = (char *)malloc(size)) == NULL)
+      return -1;
+
+   while (1)
+   {
+      // Try to print in the allocated space. 
+      va_start(ap, format);
+      n = vsnprintf(p, size, format, ap);
+      va_end(ap);
+      // If that worked, we are done. 
+      if (n > -1 && n < size)
+         break;
+      // Else try again with more space. 
+      if (n > -1)      // glibc 2.1 
+         size = n + 1; // precisely what is needed 
+      else             // glibc 2.0 
+         size *= 2;    // twice the old size 
+      if ((np = (char *)realloc(p, size)) == NULL) 
+      {
+         free(p);
+         return -1;
+      }
+      else 
+         p = np;
+   }
+   
+   str = p;
+   free(p);
+   return n;
+}
+
+
+
+/////////////////////////  strnPrintf()  //////////////////////////////////////
+int strnPrintf(string &str, size_t size, const char *format, ...)
+{
+
+   int n;
+   char *p;
+   va_list ap;
+
+   if ((p = (char *)malloc(size)) == NULL)
+      return -1;
+
+   va_start(ap, format);
+   n = vsnprintf(p, size, format, ap);
+   va_end(ap);
+   if (n > -1)
+      str = p;
+
+   return n;
 }

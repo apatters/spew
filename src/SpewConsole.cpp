@@ -20,17 +20,18 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
-#include <cstring>
+#include <string.h>
 
 #include "common.h"
 #include "SpewConsole.h"
+#include "TimeHack.h"
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -42,13 +43,13 @@ static const char READ_HACK_STR[] = "r-";
 static const char END_READ_HACK_STR[] = "r";
 static const char ERROR_HACK_STR[] = "E-";
 static const char END_ERROR_HACK_STR[] = "E";
-static const char NO_HACK_STR[] = "  ";
-static const char END_NO_HACK_STR[] = " ";
+static const char NO_HACK_STR[] = "Aa";
+static const char END_NO_HACK_STR[] = "B";
 
-static const unsigned int NON_VERTICAL_HACK_ROWS = 5;
-static const unsigned int MIN_VERTICAL_HACK_ROWS = 1;
-static const unsigned int NON_HORIZONTAL_HACK_COLUMNS = 22;
-static const unsigned int MIN_HORIZONTAL_HACK_COLUMNS = 2;
+static const unsigned int NON_VERTICAL_PROGRESS_ROWS = 5;
+static const unsigned int MIN_VERTICAL_PROGRESS_ROWS = 1;
+static const unsigned int NON_HORIZONTAL_PROGRESS_COLUMNS = 22;
+static const unsigned int MIN_HORIZONTAL_PROGRESS_COLUMNS = 2;
 
 
 //////////////////////////  SpewConsole::SpewConsole()  ///////////////////////
@@ -92,23 +93,22 @@ int SpewConsole::resize()
 }
 
 
-////////////////  SpewConsole::getCurrentNumVerticalHacks()  //////////////////
-unsigned int SpewConsole::getCurrentNumVerticalHacks() const 
+////////////////  SpewConsole::getCurrentProgressRows()  //////////////////////
+unsigned int SpewConsole::getCurrentProgressRows() const 
 {
    int rows;
-   rows = max((int)mCurrentScreenRows - (int)NON_VERTICAL_HACK_ROWS,
-              (int)MIN_VERTICAL_HACK_ROWS);  
+   rows = max((int)mCurrentScreenRows - (int)NON_VERTICAL_PROGRESS_ROWS,
+              (int)MIN_VERTICAL_PROGRESS_ROWS);  
 
    return rows;
 }
 
 
-////////////////  SpewConsole::getCurrentNumHorizontalHacks()  ////////////////
-unsigned int SpewConsole::getCurrentNumHorizontalHacks() const 
+////////////////  SpewConsole::getCurrentProgressColumns()  ///////////////////
+unsigned int SpewConsole::getCurrentProgressColumns() const 
 {
    int cols;
-   cols = max((int)mCurrentScreenColumns - (int)NON_HORIZONTAL_HACK_COLUMNS,
-              (int)MIN_HORIZONTAL_HACK_COLUMNS);
+   cols = max((int)mCurrentScreenColumns - (int)NON_HORIZONTAL_PROGRESS_COLUMNS, (int)MIN_HORIZONTAL_PROGRESS_COLUMNS);
    return cols/strlen(NO_HACK_STR);
 }
 
@@ -177,8 +177,8 @@ void SpewConsole::noEndHack()
 }
 
 
-//////////////////////////  SpewConsole::nextHackRow()  ///////////////////////
-void SpewConsole::nextHackRow() 
+//////////////////////////  SpewConsole::nextProgressRow()  ///////////////////
+void SpewConsole::nextProgressRow() 
 {
    printf("\n");
    fflush(stdout);
@@ -186,20 +186,15 @@ void SpewConsole::nextHackRow()
 
 
 ///////////////  SpewConsole::intermediateStatistics()  ///////////////////////
-void SpewConsole::intermediateStatistics(
-   capacity_t hackRowBytesTransferred,
-   const TimeHack& hackRowTransferTime,
-   capacity_t jobBytesTransferred,
-   const TimeHack& jobTransferTime,
-   capacity_t bytesInJob,
-   capacity_t totalBytesRead,
-   const TimeHack& totalReadTransferTime,
-   capacity_t totalBytesWritten,
-   const TimeHack& totalWriteTransferTime,
-   const TimeHack& totalRunTime)
+void SpewConsole::intermediateStatistics(const JobStatistics *jobStats,
+                                         const CumulativeStatistics *cumStats,
+                                         const TimeHack& currentTime,
+                                         const TimeHack& startTime)
 {
-   long double transferRate = convertCapacity(hackRowBytesTransferred, mCurrentUnits)/(long double)hackRowTransferTime.getTime();
-   long double percentage = (long double)jobBytesTransferred/(long double)bytesInJob*100.0;
+
+   long double progressRowTransferTime = jobStats->getIntervalEndTime() - jobStats->getIntervalStartTime();
+   long double transferRate = convertCapacity(jobStats->getIntervalBytesTransferred(), mCurrentUnits)/progressRowTransferTime;
+   long double percentage = (long double)jobStats->getJobBytesTransferred()/(long double)jobStats->getBytesInJob()*100.0;
 
    printf(" %3.Lf%%", percentage);
    printf(" %11.2Lf %-5s", 
@@ -209,42 +204,37 @@ void SpewConsole::intermediateStatistics(
 
 
 /////////////////  SpewConsole::cumulativeStatistics()  ///////////////////////
-void SpewConsole::cumulativeStatistics(capacity_t jobBytesTransferred,
-                                       const TimeHack& jobTransferTime,
-                                       capacity_t jobOps,
-                                       capacity_t totalBytesRead,
-                                       const TimeHack& totalReadTransferTime,
-                                       capacity_t totalReadOps,
-                                       capacity_t totalBytesWritten,
-                                       const TimeHack& totalWriteTransferTime,
-                                       capacity_t totalWriteOps,
+void SpewConsole::cumulativeStatistics(const JobStatistics *jobStats,
+                                       const CumulativeStatistics *cumStats,
                                        const TimeHack& totalRunTime)
 {
    if (mVerbosity == VERBOSITY_NONE)
       return;
 
-   long double transferRate = convertCapacity((long double)jobBytesTransferred, mCurrentUnits)/(long double)jobTransferTime.getTime();
+   TimeHack jobTransferTime = jobStats->getJobEndTime() - jobStats->getJobStartTime();
+
+   long double transferRate = convertCapacity((long double)jobStats->getJobBytesTransferred(), mCurrentUnits)/jobTransferTime.getTime();
 
    if (mIterationsToDo != 1)
    {
-      printf("Iteration: %8d    Total runtime: %s\n",
+      printf("Itereration: %8d    Total runtime: %s\n",
              mCurrentIteration, totalRunTime.getElapsedTimeStr().c_str());     
    }
    switch (mCurrentIoDirection)
    {
    case READING:
-      printf("RTR: %11.2Lf %-5s   Transfer time: %s    IOPS: %11.2Lf\n",
+      printf("RTR: %11.2Lf %-5s   Tranfser time: %s    IOPS: %11.2Lf\n",
              transferRate, 
              getTransferRateUnitsStr(mCurrentUnits), 
              jobTransferTime.getElapsedTimeStr().c_str(),
-             (long double)jobOps/(long double)jobTransferTime.getTime());  
+             (long double)cumStats->getTotalReadOps()/(long double)jobTransferTime.getTime());  
       break;
    case WRITING:
       printf("WTR: %11.2Lf %-5s   Transfer time: %s    IOPS: %11.2Lf\n",
              transferRate, 
              getTransferRateUnitsStr(mCurrentUnits), 
              jobTransferTime.getElapsedTimeStr().c_str(),
-             (long double)jobOps/(long double)jobTransferTime.getTime());  
+             (long double)cumStats->getTotalWriteOps()/(long double)jobTransferTime.getTime());  
       break;
    }
    fflush(stdout);

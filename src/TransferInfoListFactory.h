@@ -37,7 +37,7 @@ public:
       TransferInfoList::fill_method_t fillMethod,
       capacity_t offset,
       capacity_t transferSize,
-      u32_t seed);
+      u64_t seed);
 
 private:
    // Hide default methods.

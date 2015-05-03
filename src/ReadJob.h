@@ -36,18 +36,16 @@ public:
            capacity_t maxBufferSize,
            TransferInfoList::buffer_size_method_t bufferSizeMethod,
            pattern_t pattern,
-			  unsigned char userPattern,
            TransferInfoList::fill_method_t fillMethod,
            io_method_t ioMethod,
            u32_t seed,
            capacity_t jobId);
 
+   virtual IoDirection_t getIoDirection() const { return READING; };
    virtual int startJob();
    virtual int finishJob();
 
-   virtual int runTransfers(capacity_t numTransfers, bool continueAfterError);
-
-   ~ReadJob() {};
+   virtual ~ReadJob();
 
 private:
    ReadJob();               // Hide default constructor.

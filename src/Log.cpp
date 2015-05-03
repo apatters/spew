@@ -20,16 +20,21 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
+#include <string.h>
 #include <stdarg.h>
 #include <errno.h>
-#include <cstring>
+#include <signal.h>
+
+#ifdef USE_THREADS
+#include <pthread.h>
+#endif
 
 #include "common.h"
 #include "Log.h"
@@ -37,9 +42,119 @@ namespace std {} using namespace std;
 ///////////////////////////////////////////////////////////////////////////////
 ////////////////////////  Local constants  ////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-const int TIMESTAMP_STR_LEN = 19;  // Does not includes space for \0.
-const char LOGFILE_SEPARATOR_CHAR = '#';
-const int LOGFILE_WIDTH = 80;
+static const int TIMESTAMP_STR_LEN = 19;  // Does not includes space for \0.
+static const char LOGFILE_SEPARATOR_CHAR = '#';
+static const int LOGFILE_WIDTH = 80;
+
+#ifdef USE_THREADS
+//////////////////////////  Log::threadEntryPoint()  //////////////////////////
+void *Log::doWork(void *pthis)
+{
+   Log& log = *((Log *)pthis);
+
+   sigset_t sigsToBlock;
+   sigfillset(&sigsToBlock);
+   pthread_sigmask(SIG_BLOCK, &sigsToBlock, NULL);
+
+   unsigned int queueLen;
+   for (;;)
+   {
+      pthread_mutex_lock(&log.mMsgQueueMutex);
+      if (!log.mShutdown)
+         pthread_cond_wait(&log.mMsgQueueNotEmpty, &log.mMsgQueueMutex);
+
+      // Flush DisplayStdout
+      queueLen = log.mDisplayStdoutQueue.size();
+      for (unsigned int i = 0; i < queueLen; i++)
+      {
+         fprintf(log.mDisplayStdoutFile, 
+                 "%s", 
+                 log.mDisplayStdoutQueue.front().c_str());
+         log.mDisplayStdoutQueue.pop_front();
+      }
+      if (queueLen > 0)
+         fflush(log.mDisplayStdoutFile);
+
+      // Flush DisplayStderr
+      queueLen = log.mDisplayStderrQueue.size();
+      for (unsigned int i = 0; i < queueLen; i++)
+      {
+         fprintf(log.mDisplayStderrFile, 
+                 "%s", 
+                 log.mDisplayStderrQueue.front().c_str());
+         log.mDisplayStderrQueue.pop_front();
+      }
+      if (queueLen > 0)
+         fflush(log.mDisplayStderrFile);
+
+      // Flush LogStdout
+      queueLen = log.mLogStdoutQueue.size();
+      for (unsigned int i = 0; i < queueLen; i++)
+      {
+         fprintf(log.mLogStdoutFile,
+                 "%s", 
+                 log.mLogStdoutQueue.front().c_str());
+         log.mLogStdoutQueue.pop_front();
+      }
+      if (queueLen > 0)
+         fflush(log.mLogStdoutFile);
+
+      // Flush LogStderr
+      queueLen = log.mLogStderrQueue.size();
+      for (unsigned int i = 0; i < queueLen; i++)
+      {
+         fprintf(log.mLogStderrFile, 
+                 "%s", 
+                 log.mLogStderrQueue.front().c_str());
+         log.mLogStderrQueue.pop_front();
+      }
+      if (queueLen > 0)
+         fflush(log.mLogStderrFile);
+
+      pthread_mutex_unlock(&log.mMsgQueueMutex);
+      if (log.mShutdown)
+         pthread_exit(NULL);
+   }
+}
+
+
+//////////////////////////  Log::startThread() ////////////////////////////////
+int Log::startThread()
+{
+   mShutdown = false;
+   pthread_mutex_init(&mMsgQueueMutex, NULL);
+   pthread_cond_init(&mMsgQueueNotEmpty, NULL);
+   mThread = new pthread_t;
+   if (!mThread)
+      return ENOMEM;
+   if (pthread_create(mThread, NULL, Log::doWork, this) != 0)
+      return errno;
+   return EXIT_OK;
+}
+
+
+//////////////////////////  Log::stopThread()  ////////////////////////////////
+int Log::stopThread()
+{
+   int ret;
+
+   pthread_mutex_lock(&mMsgQueueMutex);
+   mShutdown = true;
+   pthread_cond_signal(&mMsgQueueNotEmpty);
+   pthread_mutex_unlock(&mMsgQueueMutex);
+	ret = pthread_join(*mThread, (void **)NULL);
+   if (!ret)
+       return ret;
+   pthread_mutex_destroy(&mMsgQueueMutex);
+   pthread_cond_destroy(&mMsgQueueNotEmpty);
+   if (mThread)
+   {
+      delete mThread;
+      mThread = 0;
+   }
+   return EXIT_OK;
+}
+#endif  // USE_THREADS
 
 
 //////////////////////////  Log::Log()  ///////////////////////////////////////
@@ -49,6 +164,12 @@ Log::Log()
    mDisplayStderrFile = stderr;
    mLogStdoutFile = (FILE *)NULL;
    mLogStderrFile = (FILE *)NULL;
+
+#ifdef USE_THREADS
+   mThread = (pthread_t *)NULL;
+   mShutdown = false;
+#endif
+
 }
 
 
@@ -59,6 +180,11 @@ Log::Log(const string &logfilePath): mLogfilePath(logfilePath)
    mDisplayStderrFile = stderr;
    mLogStdoutFile = (FILE *)NULL;
    mLogStderrFile = (FILE *)NULL;
+
+#ifdef USE_THREADS
+   mThread = 0;
+   mShutdown = false;
+#endif
 }
 
 
@@ -74,6 +200,12 @@ int Log::open()
       mLogStdoutFile = logStdoutFile;
       mLogStderrFile = logStdoutFile;
    }
+
+#ifdef USE_THREADS
+	int rtn = this->startThread();
+   if (rtn)
+      return rtn;
+#endif
    return EXIT_OK;
 }
 
@@ -81,11 +213,16 @@ int Log::open()
 //////////////////////////  Log::close()  /////////////////////////////////////
 int Log::close()
 {
+   int rtn = EXIT_OK;
+#ifdef USE_THREADS
+   rtn = this->stopThread();
+#endif
    if (mLogStdoutFile)
-   {
       fclose(mLogStdoutFile);
-   }
-   return EXIT_OK;
+   if (mLogStderrFile && (mLogStderrFile != mLogStdoutFile))
+      fclose(mLogStderrFile);
+
+   return rtn;
 }
 
 
@@ -93,65 +230,53 @@ int Log::close()
 void Log::note(unsigned int outputDevice, const char *fmt, ...) const
 {
    va_list ap;
+   int len;
+
+	// Find out how long it is.
    va_start(ap, fmt);
-
-   if (outputDevice & OUTPUT_DISPLAY_STDOUT)
-      vfprintf(mDisplayStdoutFile, fmt, ap);
-   if (outputDevice & OUTPUT_DISPLAY_STDERR)
-      vfprintf(mDisplayStderrFile, fmt, ap);
-   if ((outputDevice & OUTPUT_LOG_STDOUT) && mLogStdoutFile)
-      vfprintf(mLogStdoutFile, fmt, ap);
-   if ((outputDevice & OUTPUT_LOG_STDERR) && mLogStderrFile)
-      vfprintf(mLogStderrFile, fmt, ap);
-
+   len = vsnprintf((char *)NULL, 0, fmt, ap);
    va_end(ap);
 
-   if (outputDevice & OUTPUT_DISPLAY_STDOUT)
-      fflush(mDisplayStdoutFile);
-   if (outputDevice & OUTPUT_DISPLAY_STDERR)
-      fflush(mDisplayStderrFile);
-   if ((outputDevice & OUTPUT_LOG_STDOUT) && mLogStdoutFile)
-      fflush(mLogStdoutFile);
-   if ((outputDevice & OUTPUT_LOG_STDERR) && mLogStderrFile)
-      fflush(mLogStderrFile);
+	char *s = new char[len + 1];
+	if (!s)
+      return;
 
+	// Fill the string.
+   va_start(ap, fmt);
+   vsnprintf(s, len + 1, fmt, ap);
+   va_end(ap);
+
+   this->submitWork(outputDevice, s);
+   delete s;
 }
 
 
 //////////////////////////  Log::error()  /////////////////////////////////////
 void Log::error(unsigned int outputDevice, const char *fmt, ...) const
 {
-   if (outputDevice & OUTPUT_DISPLAY_STDOUT)
-      fprintf(mDisplayStdoutFile, "error: ");
-   if (outputDevice & OUTPUT_DISPLAY_STDERR)
-      fprintf(mDisplayStderrFile, "error: ");
-   if ((outputDevice & OUTPUT_LOG_STDOUT) && mLogStdoutFile)
-      fprintf(mLogStdoutFile, "error: ");
-   if ((outputDevice & OUTPUT_LOG_STDERR) && mLogStderrFile)
-      fprintf(mLogStderrFile, "error: ");
-
    va_list ap;
+   int len;
+   string str;
+
+	// Find out how long it is.
    va_start(ap, fmt);
-
-   if (outputDevice & OUTPUT_DISPLAY_STDOUT)
-      vfprintf(mDisplayStdoutFile, fmt, ap);
-   if (outputDevice & OUTPUT_DISPLAY_STDERR)
-      vfprintf(mDisplayStderrFile, fmt, ap);
-   if ((outputDevice & OUTPUT_LOG_STDOUT) && mLogStdoutFile)
-      vfprintf(mLogStdoutFile, fmt, ap);
-   if ((outputDevice & OUTPUT_LOG_STDERR) && mLogStderrFile)
-      vfprintf(mLogStderrFile, fmt, ap);
-
+   len = vsnprintf((char *)NULL, 0, fmt, ap);
    va_end(ap);
 
-   if (outputDevice & OUTPUT_DISPLAY_STDOUT)
-      fflush(mDisplayStdoutFile);
-   if (outputDevice & OUTPUT_DISPLAY_STDERR)
-      fflush(mDisplayStderrFile);
-   if ((outputDevice & OUTPUT_LOG_STDOUT) && mLogStdoutFile)
-      fflush(mLogStdoutFile);
-   if ((outputDevice & OUTPUT_LOG_STDERR) && mLogStderrFile)
-      fflush(mLogStderrFile);
+	char *s = new char[len + 1];
+	if (!s)
+      return;
+
+	// Fill the string.
+   va_start(ap, fmt);
+   vsnprintf(s, len + 1, fmt, ap);
+   va_end(ap);
+
+   str = "error: ";
+   str += s;
+
+   this->submitWork(outputDevice, str);
+   delete s;
 }
 
 
@@ -159,22 +284,53 @@ void Log::error(unsigned int outputDevice, const char *fmt, ...) const
 void Log::showNote(const char *fmt, ...) const
 {
    va_list ap;
+   int len;
+
+	// Find out how long it is.
    va_start(ap, fmt);
-   vfprintf(mDisplayStdoutFile, fmt, ap);
+   len = vsnprintf((char *)NULL, 0, fmt, ap);
    va_end(ap);
-   fflush(stdout);
+
+	char *s = new char[len + 1];
+	if (!s)
+      return;
+
+	// Fill the string.
+   va_start(ap, fmt);
+   vsnprintf(s, len + 1, fmt, ap);
+   va_end(ap);
+
+   this->submitWork(OUTPUT_DISPLAY_STDOUT, s);
+   delete s;
 }
 
 
 //////////////////////////  Log::showError()  /////////////////////////////////
 void Log::showError(const char *fmt, ...) const
 {
-   fprintf(stderr, "error: ");
    va_list ap;
+   int len;
+   string str;
+
+   // Find out how long it is.
    va_start(ap, fmt);
-   vfprintf(mDisplayStderrFile, fmt, ap);
+   len = vsnprintf((char *)NULL, 0, fmt, ap);
    va_end(ap);
-   fflush(stderr);
+   
+	char *s =  new char[len + 1];
+	if (!s)
+      return;
+
+	// Fill the string.	
+   va_start(ap, fmt);
+   vsnprintf(s, len + 1, fmt, ap);
+   va_end(ap);
+
+   str = "error: ";
+   str += s;
+
+   this->submitWork(OUTPUT_DISPLAY_STDERR, str);
+   delete s;
 }
 
 
@@ -184,16 +340,28 @@ void Log::logTimestamp(const char *fmt, ...) const
    if (!mLogStdoutFile)
       return;
 
-   // Put timestamp followed by message in the log.
-
-   char timestamp[TIMESTAMP_STR_LEN + 1];
-   
-   fprintf(mLogStdoutFile, "%s ", this->timestamp(timestamp));
    va_list ap;
+   int len;
+
+   // Find out how long it is.
    va_start(ap, fmt);
-   vfprintf(mLogStdoutFile, fmt, ap);
+   len = vsnprintf((char *)NULL, 0, fmt, ap);
    va_end(ap);
-   fflush(mLogStdoutFile);
+
+	char *s = new char[len + 1];
+	if (!s)
+      return;
+
+	// Fill the string.
+   va_start(ap, fmt);
+   vsnprintf(s, len + 1, fmt, ap);
+   va_end(ap);
+
+   // Put timestamp followed by message in the log.
+   string str = this->timestamp() + s;
+
+   this->submitWork(OUTPUT_LOG_STDOUT, str);
+   delete s;
 }
 
 
@@ -205,10 +373,24 @@ void Log::logNote(const char *fmt, ...) const
       return;
 
    va_list ap;
+   int len;
+
+   // Find out how long it is.
    va_start(ap, fmt);
-   vfprintf(mLogStdoutFile, fmt, ap);
+   len = vsnprintf((char *)NULL, 0, fmt, ap);
    va_end(ap);
-   fflush(mLogStdoutFile);
+
+	char *s = new char[len + 1];
+	if (!s)
+      return;
+
+	// Fill the string.
+   va_start(ap, fmt);
+   vsnprintf(s, len + 1, fmt, ap);
+   va_end(ap);
+
+   this->submitWork(OUTPUT_LOG_STDOUT, s);
+   delete s;
 }
 
 
@@ -219,10 +401,26 @@ void Log::logError(const char *fmt, ...) const
       return;
 
    va_list ap;
+   int len;
+   string str;
+
+
+   // Find out how long it is.
    va_start(ap, fmt);
-   vfprintf(mLogStderrFile, fmt, ap);
+   len = vsnprintf((char *)NULL, 0, fmt, ap);
    va_end(ap);
-   fflush(mLogStderrFile);
+
+	char *s = new char[len + 1];
+	if (!s)
+      return;
+
+	// Fill the string.
+   va_start(ap, fmt);
+   vsnprintf(s, len + 1, fmt, ap);
+   va_end(ap);
+
+   this->submitWork(OUTPUT_LOG_STDERR, s);
+   delete s;
 }
 
 
@@ -232,13 +430,14 @@ void Log::logStart() const
    if (!mLogStdoutFile)
       return;
 
-   char timestamp[TIMESTAMP_STR_LEN + 1];
-   this->timestamp(timestamp);
+   string str;
 
-   fprintf(mLogStdoutFile, "%s\n",
-           string(LOGFILE_WIDTH, LOGFILE_SEPARATOR_CHAR).c_str());
-   this->logSeparatorNote(timestamp, "START");
-   fprintf(mLogStdoutFile, "\n");
+   str = string(LOGFILE_WIDTH, LOGFILE_SEPARATOR_CHAR);
+   str += "\n";
+   str += this->logSeparatorNote(this->timestamp().c_str(), "START");
+   str += "\n";
+
+   this->submitWork(OUTPUT_LOG_STDOUT, str);
 }
 
 
@@ -248,14 +447,14 @@ void Log::logFinish() const
    if (!mLogStderrFile)
       return;
 
-   char timestamp[TIMESTAMP_STR_LEN + 1];
-   this->timestamp(timestamp);
+   string str;
 
-   fprintf(mLogStdoutFile, "\n");
-   this->logSeparatorNote(timestamp, "FINISH");
-   fprintf(mLogStdoutFile, "%s\n",
-           string(LOGFILE_WIDTH, LOGFILE_SEPARATOR_CHAR).c_str());
-   fprintf(mLogStdoutFile, "\n");
+   str = "\n";
+   str += this->logSeparatorNote(this->timestamp().c_str(), "FINISH");
+   str += string(LOGFILE_WIDTH, LOGFILE_SEPARATOR_CHAR);
+   str += "\n\n";
+
+   this->submitWork(OUTPUT_LOG_STDOUT, str);
 }
 
 
@@ -268,47 +467,49 @@ void Log::logCmdLine(const char *args) const
    const char *indent = "              ";
    const char *follower = "\\";
 
-   string msg = args;
-   this->justify(msg, leader, indent, follower);
+   string str = args;
+   this->justify(str, leader, indent, follower);
 
-   fprintf(mLogStdoutFile, "%s\n", msg.c_str());
+   this->submitWork(OUTPUT_LOG_STDOUT, str);
 }
 
 
 //////////////////////////  Log::logSeparator()  //////////////////////////////
-void Log::logSeparatorNote(const char *timestamp, const char *note) const
+string Log::logSeparatorNote(const char *timestamp, const char *note) const
 {
-   if (!mLogStdoutFile)
-      return;
-
    int noteLen = strlen(timestamp) + strlen(note) + 6;  
    int leaderLen = (LOGFILE_WIDTH - noteLen)/2;
    int followerLen = leaderLen;
    if (((LOGFILE_WIDTH - noteLen) % 2) == 1)
       followerLen += 1;
 
-   fprintf(mLogStdoutFile, "%s  %s  %s  %s\n", 
-           string(leaderLen, LOGFILE_SEPARATOR_CHAR).c_str(),
-           timestamp, 
-           note,
-           string(followerLen, LOGFILE_SEPARATOR_CHAR).c_str());
+   string str;
+   strPrintf(str, "%s  %s  %s  %s\n", 
+             string(leaderLen, LOGFILE_SEPARATOR_CHAR).c_str(),
+             timestamp, 
+             note,
+             string(followerLen, LOGFILE_SEPARATOR_CHAR).c_str());
+
+   return str;
 }
 
 
 //////////////////////////  Log::timestamp()  ////////////////////////////////
-char *Log::timestamp(char *timestamp) const
+string Log::timestamp() const
 {
    time_t currentTime;
    struct tm currentBrokenDownTime;
    
    time(&currentTime);
    localTime(&currentTime, &currentBrokenDownTime);
+
+	char timestamp[TIMESTAMP_STR_LEN + 1];
    strftime(timestamp, 
-            TIMESTAMP_STR_LEN + 1,
+            sizeof(timestamp),
             "%Y/%m/%d %T", 
             &currentBrokenDownTime);
 
-   return timestamp;
+   return string(timestamp);
 }
 
 
@@ -368,7 +569,56 @@ string& Log::justify(string& str,
 }
 
 
+//////////////////////////  Log::submitWork()  ////////////////////////////////
+void Log::submitWork(unsigned int outputDevice, const string& msg) const
+{
+   if (!outputDevice || msg.empty())
+      return;
+
+#ifdef USE_THREADS
+	if (mShutdown)
+		return;
+   pthread_mutex_lock(&mMsgQueueMutex);
+   if (outputDevice & OUTPUT_DISPLAY_STDOUT)
+      mDisplayStdoutQueue.push_back(string(msg));
+   if (outputDevice & OUTPUT_DISPLAY_STDERR)
+      mDisplayStderrQueue.push_back(string(msg));
+   if ((outputDevice & OUTPUT_LOG_STDOUT) && mLogStdoutFile)
+      mLogStdoutQueue.push_back(string(msg));
+   if ((outputDevice & OUTPUT_LOG_STDERR) && mLogStderrFile)
+      mLogStderrQueue.push_back(string(msg));
+
+   pthread_cond_signal(&mMsgQueueNotEmpty);
+   pthread_mutex_unlock(&mMsgQueueMutex);
+#else
+   if (outputDevice & OUTPUT_DISPLAY_STDOUT)
+   {
+      fprintf(mDisplayStdoutFile, msg);
+      fflush(mDisplayStdoutFile);
+   }
+   if (outputDevice & OUTPUT_DISPLAY_STDERR)
+   {
+      fflush(mDisplayStderrFile);
+      fprintf(mDisplayStderrFile, msg);
+   }
+   if ((outputDevice & OUTPUT_LOG_STDOUT) && mLogStdoutFile)
+   {
+      fprintf(mLogStdoutFile, msg);
+      fflush(mLogStdoutFile);
+   }
+   if ((outputDevice & OUTPUT_LOG_STDERR) && mLogStderrFile)
+   {
+      fprintf(mLogStderrFile, msg);
+      fflush(mLogStderrFile);
+   }
+#endif  // USE_THREADS
+}
+
+
 //////////////////////////  Log::~Log()  //////////////////////////////////////
 Log::~Log()
 {
+#ifdef USE_THREADS
+      delete mThread;
+#endif
 }

@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -47,7 +47,6 @@ WriteJob::WriteJob(Log &logger,
                    capacity_t maxBufferSize,
                    TransferInfoList::buffer_size_method_t bufferSizeMethod,
                    pattern_t pattern,
-						 unsigned char userPattern,
                    TransferInfoList::fill_method_t fillMethod,
                    io_method_t ioMethod,
                    u32_t seed,
@@ -60,7 +59,6 @@ WriteJob::WriteJob(Log &logger,
          maxBufferSize,
          bufferSizeMethod,
          pattern,
-			userPattern,
          fillMethod,
          ioMethod,
          seed,
@@ -76,12 +74,10 @@ int WriteJob::startJob()
    int flags;
 
 #ifdef O_LARGEFILE
-   flags = O_WRONLY|O_CREAT|O_LARGEFILE;
+   flags = O_WRONLY|O_CREAT|O_TRUNC|O_LARGEFILE;
 #else
-   flags = O_WRONLY|O_CREAT;
+   flags = O_WRONLY|O_CREAT|O_TRUNC;
 #endif
-	if (mOffset == 0)
-		flags |= O_TRUNC;
    switch (mIOMethod)
    {
    case ASYNCH_IO:
@@ -102,20 +98,21 @@ int WriteJob::startJob()
       return EXIT_ERROR_SYSTEM;
    }
 
-   mTransfer = TransferFactory::createInstance(mPattern,
-															  mUserPattern,
+   mTransfer = TransferFactory::createInstance(mLogger,
+                                               mPattern,
                                                mFd,
                                                mBuffer, 
                                                mMaxBufferSize, 
                                                mJobId, 
-                                               mSeed);
+                                               mSeed,
+															  this->getIoDirection());
    if (mTransfer == (Transfer *)NULL)
    {
       mLastErrorMsg = strPrintf("Could not allocate memory for transfer.\n"); 
       return EXIT_ERROR_MEMORY_ALLOC;
    }
 
-   mJobBytesTransferred = 0;
+   mStats->setJobBytesTransferred(0);
    this->setJobStartTime();
 
    return EXIT_OK;
@@ -134,39 +131,7 @@ int WriteJob::finishJob()
 }
 
 
-///////////////////////////  WriteJob::runTransfers()  ////////////////////////
-int WriteJob::runTransfers(capacity_t numTransfers, bool continueAfterError)
+///////////////////////////  WriteJob::~WriteJob()  ///////////////////////////
+WriteJob::~WriteJob()
 {
-   // continueAfterError (data integrity errors) is meaningless for
-   // writes, so it is ignored.
-
-   this->setTransferStartTime();
-   mBytesTransferred = 0;
-	mLastErrorMsg = "";
-   int exitCode = EXIT_OK;
-   for (capacity_t i = 0; i < numTransfers; i++)
-   {
-      const TransferInfo *nextTransfer = mTransferInfoList->next();
-      if (!nextTransfer)
-      {
-         mLastErrorMsg += "Fatal internal error - no transfers left to process.";
-         return EXIT_ERROR_ILLEGAL_OPERATION;
-      }
-      int ret = mTransfer->write(*nextTransfer, mLastErrorMsg);
-      capacity_t transferSize = nextTransfer->getSize();
-      if (ret == EXIT_OK)
-      {
-         mBytesTransferred += transferSize;
-         mJobBytesTransferred += transferSize;
-         if (mRunningHack)
-            mHackBytesTransferred += transferSize;
-      }
-      else
-      {
-         exitCode = ret;
-         break;
-      }
-   }
-   this->setTransferEndTime();
-   return exitCode;
 }

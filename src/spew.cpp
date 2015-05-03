@@ -20,7 +20,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 675 Mass Ave, Cambridge, MA 02139, USA.
 
-namespace std {} using namespace std;
+using namespace std;
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -57,6 +57,7 @@ namespace std {} using namespace std;
 #include "SpewConsole.h"
 #include "SpewTui.h"
 #include "TransferInfoList.h"
+#include "CumulativeStatisticsReadWrite.h"
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -102,11 +103,8 @@ static const char *PATTERN_LOOKUP[] =
 {
    "none",
    "zeros",
-   "ones",
-   "alt",
    "numbers",
    "random",
-   "#",
    (char *)NULL,
 };
 
@@ -122,14 +120,13 @@ Job::io_method_t gIOMethod = DEFAULT_IO_METHOD;
 TransferInfoList::fill_method_t gFillMethod = DEFAULT_FILL_METHOD;
 Units_t gUnits = DEFAULT_UNITS;
 bool gProgress = false;
-int gIterationsToDo = 1;
+unsigned int gIterationsToDo = 1;
 int gContinueAfterError = 0;
 u32_t gSeed = 0;
 capacity_t gMinBufferSize = DEFAULT_MIN_BUFFER_SIZE;
 capacity_t gMaxBufferSize = DEFAULT_MAX_BUFFER_SIZE;
 capacity_t gOffset = 0;
 Job::pattern_t gPattern = DEFAULT_PATTERN;
-unsigned char gUserPattern = 0;
 capacity_t gTransferSize = 0;
 string gFile = "";
 bool gUseTui = false;
@@ -138,13 +135,7 @@ bool gUseStdRcFiles = true;
 Log *gLogger = (Log *)NULL;
 capacity_t gJobId = 0;
 SpewDisplay *gDisplay = (SpewDisplay *)NULL; 
-unsigned int gCurrentIteration = 0;
-TimeHack gTotalReadTransferTime;
-TimeHack gTotalWriteTransferTime;
-capacity_t gTotalBytesRead = 0;
-capacity_t gTotalBytesWritten = 0;
-capacity_t gTotalWriteOps = 0;
-capacity_t gTotalReadOps = 0;
+CumulativeStatisticsReadWrite gCumStats;
 TimeHack gProgramStartTime;
 unsigned int gFoundTransferErrors = 0;
 
@@ -158,9 +149,16 @@ bool parse_options(int argc, const char **argv, string& cmdArgs);
 bool validate_options();
 void end_program(int exitCode);
 void end_program(int exitCode, const char *fmt, ...);
-void update_transfer_totals(const Job *job,
-                            IoDirection_t ioDirection);
-void run_statistics(unsigned int iterations);
+void cumulative_statistics(const Job *job, 
+                           const CumulativeStatistics *cumStats);
+void end_statistics(const CumulativeStatistics *cumStats);
+int run_transfers(Job &job, 
+                  capacity_t numTransfers, 
+                  bool continueAfterError,
+                  CumulativeStatisticsReadWrite *cumStats);
+void run_job(Job *job,
+             CumulativeStatistics *cumStats);
+void run_jobs(operation_enum operation, CumulativeStatistics *cumStats);
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -194,7 +192,7 @@ void note(const char *fmt, ...)
 void version()
 {
    note("%s %s\n", CANONICAL_PROG_NAME, PROG_VERSION);
-   note("Copyright 2007 Hewlett-Packard Corp.\n");
+   note("Copyright 2004 Hewlett-Packard Corp.\n");
    note("Written by Andrew Patterson <andrew.patterson@hp.com>\n");
 }
 
@@ -213,7 +211,7 @@ void help(poptContext &context)
 "\n"
 "  FILE                              Regular or device file to write data to.\n"
 "  LOGFILE                           Path to a file used for logging.\n"
-"  MAX_BUFFER_SIZE                   Minimum buffer size used in each \n"
+"  MAX_BUFFER_SIZE                   Mimimum buffer size used in each \n"
 "                                    read(2)/write(2) call (default is\n"
 "                                    MIN_BUFFER_SIZE bytes).\n"
 "                                    MAX_BUFFER_SIZE. Must be an even\n"
@@ -229,7 +227,7 @@ void help(poptContext &context)
 "                                    between the two limits are used.\n"
 "                                    MAX_BUFFER_SIZE must be an even\n"
 "                                    multiple of MIN_BUFFER_SIZE.\n"
-"  MIN_BUFFER_SIZE                   Minimum buffer size used in each \n"
+"  MIN_BUFFER_SIZE                   Mimimum buffer size used in each \n"
 "                                    read(2)/write(2) call (default is\n"
 "                                    %llu bytes).\n"
 "                                    MIN_BUFFER_SIZE. Must be an even\n"
@@ -248,10 +246,9 @@ void help(poptContext &context)
 "                                    gibibytes(g), gigabytes(G).\n"
 "                                    tebibytes(t), or terabytes(T).\n"
 "  PATTERN                           Data pattern used when writing/reading\n"
-"                                    data. Available patterns are: %s, \n"
-"                                    %s, %s, %s, %s, %s, and \"%s\"\n"
-"                                    (where \"%s\" is a number between 0-255). The\n"
-"                                    default pattern is \"%s\".\n"
+"                                    data. Available patterns are: none, \n"
+"                                    zeros, random, and numbers. The default\n"
+"                                    pattern is %s.\n"
 "  RCFILE                            Read additional command-line options\n"
 "                                    from RCFILE.  Other options on the\n"
 "                                    command-line will override options in\n"
@@ -261,9 +258,8 @@ void help(poptContext &context)
 "  TRANSFER_SIZE                     Total number of bytes to transfer (must\n"
 "                                    be an even multiple of both\n"
 "                                    MIN_BUFFER_SIZE and MAX_BUFFER)SIZE).\n"
-"                                    TRANSFER_SIZE can be specified in\n" 
-"                                    bytes, kilobytes, megabytes, or \n"
-"                                    gigabytes.\n"
+"                                    TRANSER_SIZE can be specified in bytes,\n"
+"                                    kilobytes, megabytes, or gigabytes.\n"
 "  UNITS                             Kibibytes(k), kilobytes(K), \n"
 "                                    mebibytes(m), megabytes(M),\n" 
 "                                    gibibytes(g), gigabytes(G).\n"
@@ -278,14 +274,10 @@ void help(poptContext &context)
             Transfer::OFFSET_INCREMENT,
             PATTERN_LOOKUP[Job::PATTERN_NONE],
             PATTERN_LOOKUP[Job::PATTERN_ZEROS],
-            PATTERN_LOOKUP[Job::PATTERN_ONES],
-            PATTERN_LOOKUP[Job::PATTERN_ALTERNATING],
             PATTERN_LOOKUP[Job::PATTERN_RANDOM],
             PATTERN_LOOKUP[Job::PATTERN_TRANSFER_NUMBERS],
-            PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
-            PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
             PATTERN_LOOKUP[DEFAULT_PATTERN]);
-   fprintf(stdout, outStr);
+   fprintf(stdout, "%s", outStr);
 
    fprintf(stdout, "\nReport bugs to Andrew Patterson <andrew.patterson@hp.com>.\n");
 }
@@ -551,7 +543,6 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
    int writeArg = 0;
    int readArg = 0;
    int readAfterWriteArg = 0;
-   int seedArg = 0;
    int helpArg = 0;
    int usageArg = 0;
    int iterationsArg = -1;
@@ -578,23 +569,23 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
       {"generate-load", 'g', POPT_ARG_NONE, &generateLoadArg, 0, "Equivalent to: -v -t -P -p random -i 0.",  NULL},
       {"iterations", 'i', POPT_ARG_INT, &iterationsArg, 0, "Write/read data COUNT times. If count is 0, repeats forever.", "COUNT"},
       {"logfile", 'l', POPT_ARG_STRING, &logfilePathArgStr, 0, "Send log messages to LOGFILE.", "LOGFILE"},
-      {"no-progress", 0, POPT_ARG_NONE, &noProgressArg, 0, "Don't show progress (default).", NULL},
+      {"no-progress", 0, POPT_ARG_NONE, &noProgressArg, 0, "Don't show progess (default).", NULL},
       {"no-rcfiles", 0, POPT_ARG_NONE, NULL, 0, "Don't use standard rcfiles.", NULL},
       {"no-statistics", 'q', POPT_ARG_NONE, &noStatisticsArg, 0, "Don't output statistics.", NULL},
       {"no-tui", 0, POPT_ARG_NONE, &noTuiArg, 0, "Don't use TUI interface.", NULL},
       {"offset", 'o', POPT_ARG_STRING, &offsetArgStr, 0, "Seek to OFFSET before starting I/O.", "OFFSET"},
-      {"progress", 'P', POPT_ARG_NONE, &progressArg, 0, "Show progress.", NULL},
+      {"progress", 'P', POPT_ARG_NONE, &progressArg, 0, "Show progess.", NULL},
       {"pattern", 'p', POPT_ARG_STRING, &patternArgStr, 0, "Use data pattern PATTERN when reading or writing data.", "PATTERN"},
       {"random", 'r', POPT_ARG_NONE, &randomArg, 0, "Read/Write buffers to random offsets.", NULL},
       {"raw", 0, POPT_ARG_NONE, &readAfterWriteArg, 0, "An alias for --read-after-write.", NULL},
       {"rcfile", 0, POPT_ARG_STRING, &dummyArgStr, 0, "Read command-line options from RCFILE.", "RCFILE"},
       {"read", 0, POPT_ARG_NONE, &readArg, 0, "Read date from FILE.", NULL},
       {"read-after-write", 0, POPT_ARG_NONE, &readAfterWriteArg, 0, "Read back data after writing to FILE.", NULL},
-      {"seed", 'S', POPT_ARG_INT, &seedArg, 0, "Use SEED for random number seed.","SEED"},
+      {"seed", 'S', POPT_ARG_LONG, &gSeed, 0, "Use SEED for random number seed.","SEED"},
       {"sync", 's', POPT_ARG_NONE, &syncArg, 0, "Use synchronous I/O.", NULL},
       {"statistics", 0, POPT_ARG_NONE, &statisticsArg, 0, "Output statistics (default).", NULL},
       {"tui", 't', POPT_ARG_NONE, &tuiArg, 0, "Use curses-based, terminal user interface.", NULL},
-      {"units", 'u', POPT_ARG_STRING, &unitsArgStr, 0, "Show transfer rate in UNITS units.", "UNITS"},
+      {"units", 'u', POPT_ARG_STRING, &unitsArgStr, 0, "Show tranfer rate in UNITS units.", "UNITS"},
       {"usage", 0, POPT_ARG_NONE, &usageArg, 0, "Show brief usage message and exit.", NULL},
       {"version", 'V', POPT_ARG_NONE, &gGetVersion, 0, "Output version information and exit.", NULL},
       {"detailed-statistics", 'v', POPT_ARG_NONE, &detailedStatisticsArg, 0, "Output detailed statistics.", NULL},
@@ -714,25 +705,9 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
             break;
          }
       }
-      if (!found) // Check for user pattern.
-      {
-         long int userPattern;
-         char *endPtr;
-         errno = 0;
-         userPattern = strtol(patternArgStr, &endPtr, 0);
-         if (errno == 0 && 
-             *endPtr == '\0' && 
-             userPattern >= 0 && 
-             userPattern <= 255)
-         {
-            found = true;
-            gPattern = Job::PATTERN_USER_DEFINED;
-            gUserPattern = (unsigned char)userPattern;
-         }
-      }
       if (!found)
       {
-         error_msg("\"%s\" is not a valid pattern. Use none, zeros, ones, alt, numbers, random or # (where # is any number between 0-255).\n", patternArgStr);
+         error_msg("\"%s\" is not a valid pattern. Use none, zeros, numbers, or random.\n", patternArgStr);
          usage(context);
          poptFreeContext(context);
          return false;
@@ -775,11 +750,7 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
 
    // Iterations.
    if (iterationsArg >= 0)
-      gIterationsToDo = iterationsArg;
-
-   // Seed.
-   if (seedArg >= 0)
-      gSeed = (u32_t)seedArg;
+      gIterationsToDo = (unsigned int)iterationsArg;
 
    // TUI.
    if (noTuiArg)
@@ -931,6 +902,7 @@ void end_program(int exitCode)
 //////////////////////////  end_program()  ////////////////////////////////////
 void end_program(int exitCode, const char *fmt, ...)
 {
+   int rtn;
    char msg[MAX_TMP_STR_LEN];
 
    if (gDisplay)
@@ -951,7 +923,7 @@ void end_program(int exitCode, const char *fmt, ...)
    if (gLogger)
    {
       if (exitCode == EXIT_OK)
-         run_statistics(gCurrentIteration);
+         end_statistics(&gCumStats);
       if (gFoundTransferErrors > 0)
       {
          if (gLogfilePath.length() > 0)
@@ -964,7 +936,13 @@ void end_program(int exitCode, const char *fmt, ...)
          }
       }
       gLogger->logFinish();
-      gLogger->close();
+      if ((rtn = gLogger->close()) != 0)
+      {
+         error_msg("Could not close logfile \"%s\" -- %s\n",
+                   gLogfilePath.c_str(), strError(rtn).c_str());
+         if (exitCode == EXIT_OK)
+            exitCode = EXIT_ERROR_SYSTEM;
+      }
    }
 
    exit(exitCode);
@@ -996,71 +974,56 @@ void resize(int sig)
 }
 
 
-//////////////////////////  update_job_times()  //////////////////////////////
-void update_transfer_totals(const Job *job,
-                            IoDirection_t ioDirection)
+#ifdef USE_THREADS
+//////////////////////////  threads_signal_handler()  /////////////////////////
+void *threads_signal_handler(void *arg)
 {
-   switch (ioDirection)
+   sigset_t sigsToCatch;
+   int caught;
+
+   sigemptyset(&sigsToCatch);
+   sigaddset(&sigsToCatch, SIGQUIT);
+   sigaddset(&sigsToCatch, SIGTERM);
+   sigaddset(&sigsToCatch, SIGINT);
+
+   for (;;)
    {
-   case READING:
-      gTotalBytesRead += job->getBytesTransferred();
-      gTotalReadTransferTime += job->getTransferEndTime() - job->getTransferStartTime(); 
-      break;
-   case WRITING:
-      gTotalBytesWritten += job->getBytesTransferred();
-      gTotalWriteTransferTime += job->getTransferEndTime() - job->getTransferStartTime(); 
-      break;
+      sigwait(&sigsToCatch, &caught);
+      switch(caught)
+      {
+      case SIGQUIT:
+      case SIGINT:
+         end_program(EXIT_OK);
+         break;
+      default:
+         end_program(EXIT_ERROR_CAUGHT_EXCEPTION, 
+                     "Caught signal \"%s\", exiting.\n", 
+                     strSignal(caught).c_str());
+         break;
+      }
    }
 }
-
-
-//////////////////////////  intermediate_statistics() /////////////////////////
-void intermediate_statistics(const Job *job, 
-                             IoDirection_t ioDirection)
-{
-   TimeHack currentTime(TimeHack::getCurrentTime());
-
-   gDisplay->intermediateStatistics(job->getHackBytesTransferred(),
-                                    job->getHackEndTime() - job->getHackStartTime(),
-                                    job->getJobBytesTransferred(),
-                                    currentTime - job->getJobStartTime(),
-                                    job->getTransferSize(),
-                                    gTotalBytesRead,
-                                    gTotalReadTransferTime.getTime(),
-                                    gTotalBytesWritten,
-                                    gTotalWriteTransferTime.getTime(), 
-                                    currentTime - gProgramStartTime);
-}
+#endif // USE_THREADS
 
 
 //////////////////////////  cumulative_statistics()  //////////////////////////
 void cumulative_statistics(const Job *job, 
-                           unsigned int iteration,
-                           IoDirection_t ioDirection)
+                           const CumulativeStatistics *cumStats)
 {
    TimeHack now(TimeHack::getCurrentTime());
    TimeHack jobTransferTime(job->getJobEndTime() - job->getJobStartTime());
-
-
-   gDisplay->cumulativeStatistics(job->getJobBytesTransferred(), 
-                                  jobTransferTime.getTime(),
-                                  job->getTotalNumberOfTransfers(),
-                                  gTotalBytesRead,
-                                  gTotalReadTransferTime.getTime(),
-                                  gTotalReadOps,
-                                  gTotalBytesWritten,
-                                  gTotalWriteTransferTime.getTime(), 
-                                  gTotalWriteOps,
+   gDisplay->cumulativeStatistics(job->getStatistics(),
+                                  cumStats,
                                   now - gProgramStartTime);
 
    long double transferRate = convertCapacity((long double)job->getJobBytesTransferred(), gUnits)/jobTransferTime.getTime();
    long double iops = (long double)job->getTotalNumberOfTransfers()/(long double)jobTransferTime.getTime();
 
-   switch (ioDirection)
+   switch (job->getIoDirection())
    {
    case READING:
       gLogger->logNote("Iter: %5d   RTR: %11.2Lf %-5s   TT: %s   IOPS: %11.2Lf\n",
-                       iteration,
+                       cumStats->getIterations(),
                        transferRate, 
                        getTransferRateUnitsStr(gUnits), 
                        jobTransferTime.getElapsedTimeStr().c_str(),
@@ -1068,7 +1031,7 @@ void cumulative_statistics(const Job *job,
       break;
    case WRITING:
       gLogger->logNote("Iter: %5d   WTR: %11.2Lf %-5s   TT: %s   IOPS: %11.2Lf\n",
-                       iteration,
+                       cumStats->getIterations(),
                        transferRate, 
                        getTransferRateUnitsStr(gUnits), 
                        jobTransferTime.getElapsedTimeStr().c_str(),
@@ -1078,8 +1041,8 @@ void cumulative_statistics(const Job *job,
 }
 
 
-//////////////////////////  run_statistics()  ////////////////////////////////
-void run_statistics(unsigned int iterations)
+//////////////////////////  end_statistics()  ////////////////////////////////
+void end_statistics(const CumulativeStatistics *cumStats)
 {
    unsigned int device;
    device = Log::OUTPUT_LOG_STDOUT;
@@ -1091,28 +1054,28 @@ void run_statistics(unsigned int iterations)
    if (!gUseTui)
       gLogger->note(device, "\n");
    gLogger->note(device, "Total iterations:                %17u\n",
-                 iterations);
+                 cumStats->getIterations());
    gLogger->note(device, "Total runtime:                   %17s\n",
                  gProgramStartTime.getTimeDiffStr(now).c_str());
 
-   if (gTotalBytesWritten > 0)
+   if (cumStats->getTotalBytesWritten() > 0)
    {
-      long double writeTransferRate = convertCapacity((long double)gTotalBytesWritten, gUnits)/(long double)gTotalWriteTransferTime.getTime();
-      long double writeIops = (long double)gTotalWriteOps/(long double)gTotalWriteTransferTime.getTime();
+      long double writeTransferRate = convertCapacity((long double)(cumStats->getTotalBytesWritten()), gUnits)/(long double)(cumStats->getTotalWriteTransferTime().getTime());
+      long double writeIops = (long double)cumStats->getTotalWriteOps()/(long double)(cumStats->getTotalWriteTransferTime().getTime());
       gLogger->note(device, "Total write transfer time (WTT): %17s\n", 
-                    gTotalWriteTransferTime.getElapsedTimeStr().c_str());
+                    cumStats->getTotalWriteTransferTime().getElapsedTimeStr().c_str());
       gLogger->note(device, "Total write transfer rate (WTR): %11.2Lf %-5s\n",
                     writeTransferRate, getTransferRateUnitsStr(gUnits));
       gLogger->note(device, "Total write IOPS:                %11.2Lf IOPS\n", writeIops);
                     
    }
-   if (gTotalBytesRead > 0)
+   if (cumStats->getTotalBytesRead() > 0)
       
    {
-      long double readTransferRate = convertCapacity((long double)gTotalBytesRead, gUnits)/(long double)gTotalReadTransferTime.getTime();
-      long double readIops = (long double)gTotalReadOps/(long double)gTotalReadTransferTime.getTime();
+      long double readTransferRate = convertCapacity((long double)cumStats->getTotalBytesRead(), gUnits)/(long double)(cumStats->getTotalReadTransferTime().getTime());
+      long double readIops = (long double)cumStats->getTotalReadOps()/(long double)(cumStats->getTotalReadTransferTime().getTime());
       gLogger->note(device, "Total read transfer time (RTT):  %17s\n", 
-                    gTotalReadTransferTime.getElapsedTimeStr().c_str());
+                    cumStats->getTotalReadTransferTime().getElapsedTimeStr().c_str());
       gLogger->note(device, "Total read transfer rate (RTR):  %11.2Lf %-5s\n",
                     readTransferRate, getTransferRateUnitsStr(gUnits));
       gLogger->note(device, "Total read IOPS:                 %11.2Lf IOPS\n", readIops);
@@ -1120,178 +1083,89 @@ void run_statistics(unsigned int iterations)
 }
 
 
-//////////////////////////  do_job()  /////////////////////////////////////////
-void do_job(Job *job, unsigned int iteration, IoDirection_t ioDirection)
+//////////////////////////  run_transfers()  //////////////////////////////////
+int run_transfers(Job *job, 
+                  capacity_t numTransfers, 
+                  bool continueAfterError,
+                  CumulativeStatisticsReadWrite *cumStats)
 {
    int ret;
-   capacity_t startingVerticalHacks = gDisplay->getCurrentNumVerticalHacks();
-   capacity_t startingHorizontalHacks = gDisplay->getCurrentNumHorizontalHacks();
+
+   ret = job->runTransfers(numTransfers, continueAfterError);
+
+   switch (job->getIoDirection())
+   {
+   case READING:
+      cumStats->addToTotalBytesRead(job->getBytesTransferred());
+      cumStats->addToTotalReadTransferTime(job->getTransferEndTime() - job->getTransferStartTime()); 
+      break;
+   case WRITING:
+      cumStats->addToTotalBytesWritten(job->getBytesTransferred());
+      cumStats->addToTotalWriteTransferTime(job->getTransferEndTime() - job->getTransferStartTime()); 
+      break;
+   }
+
+   return ret;
+}
+
+
+//////////////////////////  run_job()  ////////////////////////////////////////
+void run_job(Job *job, CumulativeStatisticsReadWrite *cumStats)
+{
+   int ret;
+   capacity_t startingVerticalHacks = gDisplay->getCurrentProgressRows();
+   capacity_t startingHorizontalHacks = gDisplay->getCurrentProgressColumns();
    capacity_t totalTransfers = job->getTotalNumberOfTransfers();
    capacity_t transferSize = job->getTransferSize();
-   TimeHack savedTotalWriteTransferTime(gTotalWriteTransferTime);
-   TimeHack savedTotalReadTransferTime(gTotalReadTransferTime);
+   TimeHack savedTotalWriteTransferTime(cumStats->getTotalWriteTransferTime());
+   TimeHack savedTotalReadTransferTime(cumStats->getTotalReadTransferTime());
+   gDisplay->setTotalTransfers(totalTransfers);
 
    if (gProgress || gUseTui)
    {
-      capacity_t transfersPerVerticalHack = (capacity_t)((double)totalTransfers/(double)startingVerticalHacks);
-      capacity_t verticalHacks = startingVerticalHacks;
-      if (transfersPerVerticalHack < 1LLU)
-      {
-         transfersPerVerticalHack = 1LLU;
-         verticalHacks = totalTransfers;
-      }
-
-      capacity_t transfersPerHorizontalHack = (capacity_t)((double)transfersPerVerticalHack/(double)startingHorizontalHacks);
-      capacity_t horizontalHacks = startingHorizontalHacks;
-      if (transfersPerHorizontalHack <= 1LLU)
-      {
-         transfersPerHorizontalHack = 1LLU;
-         if (transfersPerVerticalHack > startingHorizontalHacks)
-            horizontalHacks = startingHorizontalHacks;
-         else
-            horizontalHacks = transfersPerVerticalHack;
-      }
-         
       capacity_t bufferSize = job->getBufferSize();
-      capacity_t remainingTransfers;
-
-      gDisplay->startJob(iteration, ioDirection);
+      gDisplay->startJob(cumStats->getIterations(), job->getIoDirection());
       ret = job->startJob();
       if (ret != EXIT_OK)
       {
          end_program(ret, "%s\n", job->getLastErrorMessage().c_str());
       }
-      for (capacity_t i = 1LLU; i <= verticalHacks - 1; i++)
+      capacity_t numTrans;
+      while ((numTrans = gDisplay->getTransfersInNextHack()) > 0)
       {
-         // Run transfers for horizontal hacks.
-         job->startHack();
-         for (capacity_t j = 1LLU; j <= horizontalHacks - 1; j++)
-         {
-            ret = job->runTransfers(transfersPerHorizontalHack,
-                                    gContinueAfterError);
-            update_transfer_totals(job, ioDirection);
-            if (ret != EXIT_OK)
-            {
-               gFoundTransferErrors++;
-               gDisplay->errorHack();
-               if (gContinueAfterError)
-               {
-                  gLogger->logError("%s\n", 
-                                    job->getLastErrorMessage().c_str());
-               }
-               else
-               {
-                  end_program(ret, "%s\n", job->getLastErrorMessage().c_str());
-               }
-            }
-            else
-            {
-               gDisplay->hack();
-            }
-         }
-            
-         // Finish remaining transfers for last horizontal hack.
-         remainingTransfers = transfersPerVerticalHack - (transfersPerHorizontalHack * (horizontalHacks - 1));
-         ret = job->runTransfers(remainingTransfers, gContinueAfterError);
-         update_transfer_totals(job, ioDirection);
+         if (gDisplay->isStartOfProgressRow())
+            job->startInterval();
+         ret = run_transfers(job, 
+                             numTrans, 
+                             gContinueAfterError,
+                             cumStats);
+         if (gDisplay->isEndOfProgressRow(numTrans))
+            job->endInterval();
          if (ret != EXIT_OK)
          {
             gFoundTransferErrors++;
-            gDisplay->errorEndHack();
             if (gContinueAfterError)
             {
-               gLogger->logError("%s\n", job->getLastErrorMessage().c_str());
+               gLogger->logError("%s\n", 
+                                 job->getLastErrorMessage().c_str());
+               gDisplay->addToProgress(numTrans, 
+                                       true, 
+                                       job->getStatistics(),
+                                       cumStats);
             }
             else
             {
-               gDisplay->nextHackRow();
                end_program(ret, "%s\n", job->getLastErrorMessage().c_str());
             }
          }
          else
          {
-            gDisplay->endHack();
+            gDisplay->addToProgress(numTrans, 
+                                    false,
+                                    job->getStatistics(),
+                                    cumStats);
          }
-         job->endHack();
-         for (capacity_t j = 0;
-              j < startingHorizontalHacks - horizontalHacks;
-              j++)
-         {
-            gDisplay->noHack();
-         }
-         intermediate_statistics(job, ioDirection);
-         gDisplay->nextHackRow();
-      }
-
-      // Finish transfers for last vertical hack leftovers.
-      remainingTransfers = (transferSize - job->getJobBytesTransferred())/bufferSize;
-      if (remainingTransfers > 0LLU)
-      {
-         job->startHack();
-         transfersPerHorizontalHack = (capacity_t)((double)remainingTransfers/(double)startingHorizontalHacks);
-         if (transfersPerHorizontalHack <= 1)
-         {
-            transfersPerHorizontalHack = 1LLU;
-            if (remainingTransfers > startingHorizontalHacks)
-               horizontalHacks = startingHorizontalHacks;
-            else
-               horizontalHacks = remainingTransfers;
-         }
-         for (capacity_t j = 1LLU; j <= horizontalHacks - 1; j++)
-         {
-            ret = job->runTransfers(transfersPerHorizontalHack,
-                                    gContinueAfterError);
-            update_transfer_totals(job, ioDirection);
-            if (ret != EXIT_OK)
-            {
-               gFoundTransferErrors++;
-               gDisplay->errorHack();
-               if (gContinueAfterError)
-               {
-                  gLogger->logError("%s\n", 
-                                    job->getLastErrorMessage().c_str());
-               }
-               else
-               {
-                  gDisplay->nextHackRow();
-                  end_program(ret, "%s\n", job->getLastErrorMessage().c_str());
-               }
-            }
-            else
-            {
-               gDisplay->hack();
-            }
-         }
-         ret = job->runTransfers(remainingTransfers - (transfersPerHorizontalHack * (horizontalHacks - 1)), gContinueAfterError);
-         update_transfer_totals(job, ioDirection);
-         if (ret != EXIT_OK)
-         {
-            gFoundTransferErrors++;
-            gDisplay->errorEndHack();
-            if (gContinueAfterError)
-            {
-               gLogger->logError("%s\n", job->getLastErrorMessage().c_str());
-            }
-            else
-            {
-               gDisplay->nextHackRow();
-               end_program(ret, "%s\n", job->getLastErrorMessage().c_str());
-            }
-         }
-         else
-         {
-            gDisplay->endHack();
-         }
-         job->endHack();
-         for (capacity_t j = 0; 
-              j < startingHorizontalHacks - horizontalHacks;
-              j++)
-         {
-            gDisplay->noHack();
-         }
-         intermediate_statistics(job, ioDirection);
-         gDisplay->nextHackRow();
-      }
+      }            
       ret = job->finishJob();
       if (ret != EXIT_OK)
       {
@@ -1299,17 +1173,19 @@ void do_job(Job *job, unsigned int iteration, IoDirection_t ioDirection)
          exit(ret);
       }
    }
-   else
+   else  // no progress or TUI.
    {
-      gDisplay->startJob(iteration, ioDirection);
+      gDisplay->startJob(cumStats->getIterations(), job->getIoDirection());
       ret = job->startJob();
       if (ret != EXIT_OK)
       {
          end_program(ret, "%s\n", job->getLastErrorMessage().c_str());
          exit(ret);
       }
-      ret = job->runTransfers(totalTransfers, gContinueAfterError);
-      update_transfer_totals(job, ioDirection);
+      ret = run_transfers(job, 
+                          totalTransfers,
+                          gContinueAfterError,
+                          cumStats);
       if (ret != EXIT_OK)
       {
          gFoundTransferErrors++;
@@ -1330,201 +1206,230 @@ void do_job(Job *job, unsigned int iteration, IoDirection_t ioDirection)
    }
    // May get incremental time errors during transfers, so reset transfer 
    // totals to old value plus total job time.
-   switch (ioDirection)
+   switch (job->getIoDirection())
    {
    case READING:
-      gTotalReadTransferTime = savedTotalReadTransferTime + job->getJobEndTime() - job->getJobStartTime();
+      cumStats->setTotalReadTransferTime(savedTotalReadTransferTime + job->getJobEndTime() - job->getJobStartTime());
       break;
    case WRITING:
-      gTotalWriteTransferTime = savedTotalWriteTransferTime + job->getJobEndTime() - job->getJobStartTime();
+      cumStats->setTotalWriteTransferTime(savedTotalWriteTransferTime + job->getJobEndTime() - job->getJobStartTime());
       break;
    }
 
    // Update IOPS.
-   switch (ioDirection)
+   switch (job->getIoDirection())
    {
    case READING:
-      gTotalReadOps += job->getTotalNumberOfTransfers(); 
+      cumStats->addToTotalReadOps(job->getTotalNumberOfTransfers()); 
       break;
    case WRITING:
-      gTotalWriteOps += job->getTotalNumberOfTransfers(); 
+      cumStats->addToTotalWriteOps(job->getTotalNumberOfTransfers()); 
       break;
    }
 
-   cumulative_statistics(job, iteration, ioDirection);
+   cumulative_statistics(job, cumStats);
    gDisplay->endJob();
 }
 
 
-//////////////////////////  run()  ////////////////////////////////////////////
-void run(operation_enum operation)
-{
-   int ret;
-   u32_t iterationSeed = gSeed;
-   Random rnd(gSeed);
-
-   gCurrentIteration = 0;
-   do
+//////////////////////////  run_jobs()  ///////////////////////////////////////
+   void run_jobs(operation_enum operation, 
+                 CumulativeStatisticsReadWrite *cumStats)
    {
-      gCurrentIteration++;
-      if (operation == OPERATION_WRITE || 
-          operation == OPERATION_READ_AFTER_WRITE)
+      int ret;
+
+      cumStats->setIterations(0);
+      do
       {
-         Job *job = new WriteJob(*gLogger,
-                                 gFile,
-                                 gOffset,
-                                 gTransferSize,
-                                 gMinBufferSize,
-                                 gMaxBufferSize,
-                                 TransferInfoList::GEOMETRIC_PROGRESSION,
-                                 gPattern,
-                                 gUserPattern,
-                                 gFillMethod,
-                                 gIOMethod,
-                                 iterationSeed,
-                                 gJobId);
-         if (job == (Job *)NULL)
-         {
-            gLogger->showError("Could not allocate memory.");
-            exit(EXIT_ERROR_MEMORY_ALLOC);
-         }
-         if ((ret = job->init()) != EXIT_OK)
-         {
-            gLogger->showError("Could not initialize job.\n");
-            exit(ret);
-         }
-         
-         do_job(job, gCurrentIteration, WRITING);
-         delete job;
-         
-         if (gIterationsToDo == 0 || 
-             gCurrentIteration < gIterationsToDo ||
-             gCurrentIteration == gIterationsToDo && 
+         cumStats->incIterations();
+         if (operation == OPERATION_WRITE || 
              operation == OPERATION_READ_AFTER_WRITE)
          {
-            gDisplay->nextJob();
+            Job *job = new WriteJob(*gLogger,
+                                    gFile,
+                                    gOffset,
+                                    gTransferSize,
+                                    gMinBufferSize,
+                                    gMaxBufferSize,
+                                    TransferInfoList::GEOMETRIC_PROGRESSION,
+                                    gPattern,
+                                    gFillMethod,
+                                    gIOMethod,
+                                    gSeed,
+                                    gJobId);
+            if (job == (Job *)NULL)
+            {
+               gLogger->showError("Could not allocate memory.");
+               exit(EXIT_ERROR_MEMORY_ALLOC);
+            }
+            if ((ret = job->init()) != EXIT_OK)
+            {
+               gLogger->showError("Could not initialize job.\n");
+               exit(ret);
+            }
+         
+            run_job(job, cumStats);
+            delete job;
+         
+            if (gIterationsToDo == 0 || 
+                cumStats->getIterations() < gIterationsToDo ||
+                cumStats->getIterations() == gIterationsToDo && 
+                operation == OPERATION_READ_AFTER_WRITE)
+            {
+               gDisplay->nextJob();
+            }
          }
-      }
 
-      if (operation == OPERATION_READ || 
-          operation == OPERATION_READ_AFTER_WRITE)
-      {
-         Job *job = new ReadJob(*gLogger,
-                                gFile,
-                                gOffset,
-                                gTransferSize,
-                                gMinBufferSize,
-                                gMaxBufferSize,
-                                TransferInfoList::GEOMETRIC_PROGRESSION,
-                                gPattern,
-                                gUserPattern,
-                                gFillMethod,
-                                gIOMethod,
-                                iterationSeed,
-                                gJobId);
-         if (job == (Job *)NULL)
+         if (operation == OPERATION_READ || 
+             operation == OPERATION_READ_AFTER_WRITE)
          {
-            gLogger->showError("Could not allocate memory.");
-            exit(EXIT_ERROR_MEMORY_ALLOC);
-         }
-         if ((ret = job->init()) != EXIT_OK)
-         {
-            gLogger->showError("Could not initialize job.\n");
-            exit(ret);
+            Job *job = new ReadJob(*gLogger,
+                                   gFile,
+                                   gOffset,
+                                   gTransferSize,
+                                   gMinBufferSize,
+                                   gMaxBufferSize,
+                                   TransferInfoList::GEOMETRIC_PROGRESSION,
+                                   gPattern,
+                                   gFillMethod,
+                                   gIOMethod,
+                                   gSeed,
+                                   gJobId);
+            if (job == (Job *)NULL)
+            {
+               gLogger->showError("Could not allocate memory.");
+               exit(EXIT_ERROR_MEMORY_ALLOC);
+            }
+            if ((ret = job->init()) != EXIT_OK)
+            {
+               gLogger->showError("Could not initialize job.\n");
+               exit(ret);
+            }
+
+            run_job(job, cumStats);
+            delete job;
+
+            if (gIterationsToDo == 0 || cumStats->getIterations() < gIterationsToDo)
+            {
+               gDisplay->nextJob();
+            }
          }
 
-         do_job(job, gCurrentIteration, READING);
-         delete job;
-
-         if (gIterationsToDo == 0 || gCurrentIteration < gIterationsToDo)
-         {
-            gDisplay->nextJob();
-         }
-      }
-	  iterationSeed = rnd.getRandom32();
-
-   } while (gIterationsToDo == 0LLU || gCurrentIteration < gIterationsToDo);
-}
+      } while (gIterationsToDo == 0LLU || cumStats->getIterations() < gIterationsToDo);
+   }
 
 
 //////////////////////////  main()  ///////////////////////////////////////////
-int main(int argc, char *argv[])
-{
-   int rtn;
+   int main(int argc, char *argv[])
+   {
+      int rtn;
 
-   // Process command-line options.
-   gPrgName = argv[0];
-   const char *prgBasename = basename(gPrgName);
-   string cmdArgs;
+      // Process command-line options.
+      gPrgName = argv[0];
+      const char *prgBasename = basename(gPrgName);
+      string cmdArgs;
    
-   for (int i = 1; PROG_NAME_LOOKUP[i] != (char *)NULL; i++)
-   {
-      if (strcmp(prgBasename, PROG_NAME_LOOKUP[i]) == 0)
+      for (int i = 1; PROG_NAME_LOOKUP[i] != (char *)NULL; i++)
       {
-         gOperation = (operation_enum)i;
-         break;
+         if (strcmp(prgBasename, PROG_NAME_LOOKUP[i]) == 0)
+         {
+            gOperation = (operation_enum)i;
+            break;
+
+         }
       }
+
+      if (!parse_options(argc, (const char **)argv, cmdArgs))
+      {
+         exit(EXIT_ERROR_USAGE);
+      }
+      if (!validate_options())
+         exit(EXIT_ERROR_USAGE);
+
+      if (gGetVersion)
+      {
+         version();
+         exit(0);
+      }
+
+      struct sigaction action;
+#ifdef USE_THREADS
+      sigset_t sigsToBlock;
+      sigemptyset(&sigsToBlock);
+      sigaddset(&sigsToBlock, SIGQUIT);
+      sigaddset(&sigsToBlock, SIGTERM);
+      sigaddset(&sigsToBlock, SIGINT);
+      pthread_sigmask(SIG_BLOCK, &sigsToBlock, NULL);
+
+      action.sa_handler = resize;
+      sigemptyset(&action.sa_mask);
+      action.sa_flags = SA_RESTART;
+      sigaction(SIGWINCH, &action, NULL);
+
+      pthread_t signal_handler_thread;
+      if (pthread_create(&signal_handler_thread, 
+                         NULL,
+                         &threads_signal_handler,
+                         NULL))
+      {
+         error_msg("Could not create thread.\n");
+         exit(EXIT_ERROR_SYSTEM);
+      }
+#else
+      action.sa_handler = cleanup;
+      sigemptyset(&action.sa_mask);
+      action.sa_flags = 0;
+      sigaction(SIGQUIT, &action, NULL);
+      sigaction(SIGTERM, &action, NULL);
+      sigaction(SIGINT, &action, NULL);
+
+      action.sa_handler = resize;
+      sigemptyset(&action.sa_mask);
+      action.sa_flags = SA_RESTART;
+      sigaction(SIGWINCH, &action, NULL);
+#endif // USE_THREADS
+
+      gLogger = new Log(gLogfilePath);
+      if (gLogger == (Log *)NULL)
+      {
+         end_program(EXIT_ERROR_MEMORY_ALLOC, "Out of memory.\n");
+      }
+      if ((rtn = gLogger->open()) != EXIT_OK)
+      {
+         end_program(rtn, "Could not open logfile \"%s\" -- %s\n",
+                     gLogfilePath.c_str(), strError(rtn).c_str());
+      }
+
+      if (gUseTui)
+         gDisplay = new SpewTui(gIterationsToDo, gUnits, gProgress, gVerbosity);
+      else
+         gDisplay = new SpewConsole(gIterationsToDo, gUnits, gProgress, gVerbosity);
+
+      if (gDisplay == (SpewDisplay *)NULL)
+         end_program(EXIT_ERROR_MEMORY_ALLOC, "Out of memory.\n");
+      if ((rtn = gDisplay->init()) != EXIT_OK)
+         end_program(rtn, "Could not initialize display.\n");
+
+      gDisplay->setCurrentUnits(gUnits);
+      gProgramStartTime = TimeHack::getCurrentTime();
+      gLogger->logStart();
+      gLogger->logCmdLine(cmdArgs.c_str());
+      gLogger->logNote("\n");
+      gDisplay->startRun(gProgramStartTime);
+
+      try 
+      {
+         run_jobs(gOperation, &gCumStats);
+      } catch(...)
+      {
+         gLogger->showError("Caught exception\n");
+         exit(EXIT_ERROR_CAUGHT_EXCEPTION);
+      }
+      gDisplay->endRun();
+      end_program(EXIT_OK);
+
+      return 0;
    }
-
-   if (!parse_options(argc, (const char **)argv, cmdArgs))
-   {
-      exit(EXIT_ERROR_USAGE);
-   }
-   if (!validate_options())
-      exit(EXIT_ERROR_USAGE);
-
-   if (gGetVersion)
-   {
-      version();
-      exit(0);
-   }
-
-   gLogger = new Log(gLogfilePath);
-   if (gLogger == (Log *)NULL)
-   {
-      end_program(EXIT_ERROR_MEMORY_ALLOC, "Out of memory.\n");
-   }
-   if ((rtn = gLogger->open()) != EXIT_OK)
-   {
-      end_program(rtn, "Could not open logfile \"%s\" -- %s\n",
-                  gLogfilePath.c_str(), strError(rtn).c_str());
-   }
-
-   signal(SIGQUIT, cleanup);
-   signal(SIGTERM, cleanup);
-   signal(SIGINT, cleanup);
-   signal(SIGWINCH, resize);
-
-   if (gUseTui)
-      gDisplay = new SpewTui(gIterationsToDo, gUnits, gProgress, gVerbosity);
-   else
-      gDisplay = new SpewConsole(gIterationsToDo, gUnits, gProgress, gVerbosity);
-
-   if (gDisplay == (SpewDisplay *)NULL)
-      end_program(EXIT_ERROR_MEMORY_ALLOC, "Out of memory.\n");
-   if ((rtn = gDisplay->init()) != EXIT_OK)
-      end_program(rtn, "Could not initialize display.\n");
-
-   gDisplay->setCurrentUnits(gUnits);
-   gProgramStartTime = TimeHack::getCurrentTime();
-   gLogger->logStart();
-   gLogger->logCmdLine(cmdArgs.c_str());
-   gLogger->logNote("\n");
-   gDisplay->startRun();
-
-   try 
-   {
-      run(gOperation);
-   } catch(...)
-   {
-      gLogger->showError("Caught exception\n");
-      exit(EXIT_ERROR_CAUGHT_EXCEPTION);
-   }
-   gDisplay->endRun();
-   end_program(EXIT_OK);
-
-   return 0;
-}
 
 
 
