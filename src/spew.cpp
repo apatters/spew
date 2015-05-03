@@ -151,13 +151,13 @@ unsigned int gFoundTransferErrors = 0;
 //////////////////////////////////////////////////////////////////////////////
 ////////////////////  Function Prototypes  ///////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
-void error_msg(char *fmt, ...);
-void note(char *fmt, ...);
+void error_msg(const char *fmt, ...);
+void note(const char *fmt, ...);
 void usage();
 bool parse_options(int argc, const char **argv, string& cmdArgs);
 bool validate_options();
 void end_program(int exitCode);
-void end_program(int exitCode, char *fmt, ...);
+void end_program(int exitCode, const char *fmt, ...);
 void update_transfer_totals(const Job *job,
                             IoDirection_t ioDirection);
 void run_statistics(unsigned int iterations);
@@ -168,7 +168,7 @@ void run_statistics(unsigned int iterations);
 //////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////  error_msg()  ///////////////////////////////////////
-void error_msg(char *fmt, ...)
+void error_msg(const char *fmt, ...)
 {
    fprintf(stderr, "%s: ", gPrgName);
    va_list ap;
@@ -180,7 +180,7 @@ void error_msg(char *fmt, ...)
 
 
 /////////////////////////  note()  ///////////////////////////////////////////
-void note(char *fmt, ...)
+void note(const char *fmt, ...)
 {
    va_list ap;
    va_start(ap, fmt);
@@ -283,7 +283,7 @@ void help(poptContext &context)
             PATTERN_LOOKUP[Job::PATTERN_RANDOM],
             PATTERN_LOOKUP[Job::PATTERN_TRANSFER_NUMBERS],
             PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
-				PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
+            PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
             PATTERN_LOOKUP[DEFAULT_PATTERN]);
    fprintf(stdout, outStr);
 
@@ -714,22 +714,22 @@ bool parse_options(int argc, const char **argv, string& cmdArgs)
             break;
          }
       }
-		if (!found) // Check for user pattern.
-		{
-			long int userPattern;
-			char *endPtr;
-			errno = 0;
-			userPattern = strtol(patternArgStr, &endPtr, 0);
-			if (errno == 0 && 
-				 *endPtr == '\0' && 
-				 userPattern >= 0 && 
-				 userPattern <= 255)
-			{
-				found = true;
-				gPattern = Job::PATTERN_USER_DEFINED;
-				gUserPattern = (unsigned char)userPattern;
-			}
-		}
+      if (!found) // Check for user pattern.
+      {
+         long int userPattern;
+         char *endPtr;
+         errno = 0;
+         userPattern = strtol(patternArgStr, &endPtr, 0);
+         if (errno == 0 && 
+             *endPtr == '\0' && 
+             userPattern >= 0 && 
+             userPattern <= 255)
+         {
+            found = true;
+            gPattern = Job::PATTERN_USER_DEFINED;
+            gUserPattern = (unsigned char)userPattern;
+         }
+      }
       if (!found)
       {
          error_msg("\"%s\" is not a valid pattern. Use none, zeros, ones, alt, numbers, random or # (where # is any number between 0-255).\n", patternArgStr);
@@ -929,7 +929,7 @@ void end_program(int exitCode)
 
 
 //////////////////////////  end_program()  ////////////////////////////////////
-void end_program(int exitCode, char *fmt, ...)
+void end_program(int exitCode, const char *fmt, ...)
 {
    char msg[MAX_TMP_STR_LEN];
 
@@ -1040,8 +1040,11 @@ void cumulative_statistics(const Job *job,
 {
    TimeHack now(TimeHack::getCurrentTime());
    TimeHack jobTransferTime(job->getJobEndTime() - job->getJobStartTime());
+
+
    gDisplay->cumulativeStatistics(job->getJobBytesTransferred(), 
                                   jobTransferTime.getTime(),
+                                  job->getTotalNumberOfTransfers(),
                                   gTotalBytesRead,
                                   gTotalReadTransferTime.getTime(),
                                   gTotalReadOps,
@@ -1373,7 +1376,7 @@ void run(operation_enum operation)
                                  gMaxBufferSize,
                                  TransferInfoList::GEOMETRIC_PROGRESSION,
                                  gPattern,
-											gUserPattern,
+                                 gUserPattern,
                                  gFillMethod,
                                  gIOMethod,
                                  gSeed,
@@ -1412,7 +1415,7 @@ void run(operation_enum operation)
                                 gMaxBufferSize,
                                 TransferInfoList::GEOMETRIC_PROGRESSION,
                                 gPattern,
-										  gUserPattern,
+                                gUserPattern,
                                 gFillMethod,
                                 gIOMethod,
                                 gSeed,

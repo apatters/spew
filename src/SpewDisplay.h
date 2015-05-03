@@ -69,6 +69,7 @@ public:
                                        const TimeHack& totalRunTime) = 0;
    virtual void cumulativeStatistics(capacity_t jobBytesTransferred,
                                      const TimeHack& jobTransferTime,
+                                     capacity_t jobOps,
                                      capacity_t totalBytesRead,
                                      const TimeHack& totalReadTransferTime,
                                      capacity_t totalReadOps,

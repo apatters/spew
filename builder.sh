@@ -46,25 +46,19 @@ case $arch in
       TAR_FLAGS=-r 
       TAR_EXT=zip
       ;;
-    hpux11-parisc64)
-      MAKE=gmake
-      TAR=/usr/local/bin/tar
-      ldflags="-L/home/andrew/popt-1.7/.libs -lpthread" 
-      cxxflags="-I/home/andrew/popt-1.7 -I/usr/local/include/ncurses"
-      ;;
      hpux11-ia64)
-     cxx=aCC
-     cc=aCC
+     cxx=g++
+     cc=gcc
      MAKE=gmake
      TAR=/usr/bin/tar
      COMPRESS=/usr/local/bin/gzip
      COMPRESS_FLAGS=-c
-     ldflags="-mt -Wl,-a,archive_shared -L /usr/local/lib/hpux32"
-     libs="-lgettextlib -lpopt -lintl -liconv"
-     cxxflags="-AA -I/usr/local/include -I/usr/local/include/ncurses -mt"
+     ldflags="-L /usr/local/lib/hpux32"
+     libs="-lncurses -lpopt -lintl -liconv"
+     cxxflags="-I/usr/local/include -I/usr/local/include/ncurses"
      ;;
     *)
-      echo "error: unknown architecture -- use one of linux-ia32, linux-ia64, linux-parisc64, cygwinxp-ia32, hpux11-parisc64, or hpux11-ia64" >&2
+      echo "error: unknown architecture -- use one of linux-ia32, linux-ia64, linux-parisc64, cygwinxp-ia32, or hpux11-ia64" >&2
       exit 1
       ;;
 esac

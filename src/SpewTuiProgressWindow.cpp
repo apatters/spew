@@ -30,6 +30,8 @@ namespace std {} using namespace std;
 #include <config.h>
 #endif
 
+#include <cstring>
+
 #include "common.h"
 #include "SpewTui.h"
 #include "SpewTuiProgressWindow.h"

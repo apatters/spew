@@ -27,6 +27,8 @@ namespace std {} using namespace std;
 #endif
 
 #include <stdio.h>
+#include <cstring>
+
 #include "common.h"
 #include "SpewConsole.h"
 
@@ -209,6 +211,7 @@ void SpewConsole::intermediateStatistics(
 /////////////////  SpewConsole::cumulativeStatistics()  ///////////////////////
 void SpewConsole::cumulativeStatistics(capacity_t jobBytesTransferred,
                                        const TimeHack& jobTransferTime,
+                                       capacity_t jobOps,
                                        capacity_t totalBytesRead,
                                        const TimeHack& totalReadTransferTime,
                                        capacity_t totalReadOps,
@@ -224,7 +227,7 @@ void SpewConsole::cumulativeStatistics(capacity_t jobBytesTransferred,
 
    if (mIterationsToDo != 1)
    {
-      printf("Itereration: %8d    Total runtime: %s\n",
+      printf("Iteration: %8d    Total runtime: %s\n",
              mCurrentIteration, totalRunTime.getElapsedTimeStr().c_str());     
    }
    switch (mCurrentIoDirection)
@@ -234,14 +237,14 @@ void SpewConsole::cumulativeStatistics(capacity_t jobBytesTransferred,
              transferRate, 
              getTransferRateUnitsStr(mCurrentUnits), 
              jobTransferTime.getElapsedTimeStr().c_str(),
-             (long double)totalReadOps/(long double)jobTransferTime.getTime());  
+             (long double)jobOps/(long double)jobTransferTime.getTime());  
       break;
    case WRITING:
       printf("WTR: %11.2Lf %-5s   Transfer time: %s    IOPS: %11.2Lf\n",
              transferRate, 
              getTransferRateUnitsStr(mCurrentUnits), 
              jobTransferTime.getElapsedTimeStr().c_str(),
-             (long double)totalWriteOps/(long double)jobTransferTime.getTime());  
+             (long double)jobOps/(long double)jobTransferTime.getTime());  
       break;
    }
    fflush(stdout);
