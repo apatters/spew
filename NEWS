@@ -1,3 +1,10 @@
+Changes since 1.0.4
+
+* Fixed bug in calculating read IOPS.
+
+* Fixed double-counting bug when calculating intermediate statistics
+  (used with --progress option).
+
 Changes since 1.0.3
 
 * Renamed the executable "snarf" to "gorge" to prevent a naming conflict with 

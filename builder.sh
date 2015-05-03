@@ -28,8 +28,10 @@ TAR_EXT=tgz
 
 case $arch in
     linux-ia32)
+      libs="-ldl"
       ;;
     linux-ia64)
+      libs="-ldl"
       ;;
     linux-parisc64)
       ;;
@@ -69,7 +71,7 @@ if [ -f  Makefile ]
 then
   ${MAKE} distclean
 fi
-CXXFLAGS="$cxxflags" LDFLAGS="$ldflags" ./configure $configopts
+LIBS="$libs" CXXFLAGS="$cxxflags" LDFLAGS="$ldflags" ./configure $configopts
 ${MAKE} clean all
 ${MAKE} install prefix=${installdir}
 ( cd ${builddir} && ${TAR} ${TAR_FLAGS} ${topdir}/${distname}.${TAR_EXT} . )
