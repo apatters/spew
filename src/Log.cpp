@@ -37,7 +37,8 @@ using namespace std;
 ////////////////////////  Local constants  ////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 int TIMESTAMP_STR_LEN = 19;  // Does not includes space for \0.
-
+char LOGFILE_SEPARATOR_CHAR = '#';
+int LOGFILE_WIDTH = 80;
 
 
 //////////////////////////  Log::Log()  ///////////////////////////////////////
@@ -231,10 +232,12 @@ void Log::logStart() const
       return;
 
    char timestamp[TIMESTAMP_STR_LEN + 1];
-   fprintf(mLogStdoutFile, "###############################################################################\n");
-   fprintf(mLogStdoutFile, "#######################  %s  START  ##########################\n", this->timestamp(timestamp));
-   fprintf(mLogStdoutFile, "\n");
+   this->timestamp(timestamp);
 
+   fprintf(mLogStdoutFile, "%s\n",
+           string(LOGFILE_WIDTH, LOGFILE_SEPARATOR_CHAR).c_str());
+   this->logSeparatorNote(timestamp, "START");
+   fprintf(mLogStdoutFile, "\n");
 }
 
 
@@ -245,26 +248,49 @@ void Log::logFinish() const
       return;
 
    char timestamp[TIMESTAMP_STR_LEN + 1];
-   fprintf(mLogStdoutFile, "\n");
-   fprintf(mLogStdoutFile, "#######################  %s  FINISH  #########################\n", this->timestamp(timestamp));
-   fprintf(mLogStdoutFile, "###############################################################################\n");
-   fprintf(mLogStdoutFile, "\n");
+   this->timestamp(timestamp);
 
+   fprintf(mLogStdoutFile, "\n");
+   this->logSeparatorNote(timestamp, "FINISH");
+   fprintf(mLogStdoutFile, "%s\n",
+           string(LOGFILE_WIDTH, LOGFILE_SEPARATOR_CHAR).c_str());
+   fprintf(mLogStdoutFile, "\n");
 }
 
 
 //////////////////////////  Log::logCmdLine()  ///////////////////////////////
-void Log::logCmdLine(int argc, char **argv) const
+void Log::logCmdLine(const char *args) const
 {
    if (!mLogStderrFile)
       return;
+   const char *leader = "Command-line: ";
+   const char *indent = "              ";
+   const char *follower = "\\";
 
-   fprintf(mLogStdoutFile, "Command-line: ");
-   if (argc > 0)
-      fprintf(mLogStdoutFile, "%s ", basename(argv[0]));
-   for (int i = 1; i < argc; i++)
-      fprintf(mLogStdoutFile, "%s ", argv[i]);
-   fprintf(mLogStdoutFile, "\n");
+   string msg = args;
+   this->justify(msg, leader, indent, follower);
+
+   fprintf(mLogStdoutFile, "%s\n", msg.c_str());
+}
+
+
+//////////////////////////  Log::logSeparator()  //////////////////////////////
+void Log::logSeparatorNote(const char *timestamp, const char *note) const
+{
+   if (!mLogStdoutFile)
+      return;
+
+   int noteLen = strlen(timestamp) + strlen(note) + 6;  
+   int leaderLen = (LOGFILE_WIDTH - noteLen)/2;
+   int followerLen = leaderLen;
+   if (((LOGFILE_WIDTH - noteLen) % 2) == 1)
+      followerLen += 1;
+
+   fprintf(mLogStdoutFile, "%s  %s  %s  %s\n", 
+           string(leaderLen, LOGFILE_SEPARATOR_CHAR).c_str(),
+           timestamp, 
+           note,
+           string(followerLen, LOGFILE_SEPARATOR_CHAR).c_str());
 }
 
 
@@ -282,6 +308,62 @@ char *Log::timestamp(char *timestamp) const
             &currentBrokenDownTime);
 
    return timestamp;
+}
+
+
+//////////////////////////  Log::justify()  ///////////////////////////////////
+string& Log::justify(string& str, 
+                     const string& leader, 
+                     const string& hangingIndent,
+                     const string& follower) const
+{
+   string origStr = str;
+   string::size_type leaderLen = leader.length();
+   string::size_type indentLen = hangingIndent.length();
+   string::size_type followerLen = follower.length();
+   string::size_type origLen = origStr.length();
+   string::size_type curOrigPos = 0;
+   string::size_type spacePos = string::npos;
+   string::size_type curLinePos = 0;
+
+   str = leader;
+   curOrigPos = 0;
+   curLinePos = leaderLen;
+   while (curOrigPos < origLen)
+   {
+      spacePos = origStr.find(' ', curOrigPos);
+      if (spacePos != string::npos)
+      {
+         // Skip over successive or leading spaces.
+         if (curOrigPos == spacePos) 
+         {
+            curOrigPos++;
+            continue;
+         }
+         string word = origStr.substr(curOrigPos, spacePos - curOrigPos);
+         string::size_type wordLen = word.length();
+         if (wordLen + followerLen + curLinePos > LOGFILE_WIDTH)
+         {
+            str += follower;
+            str += "\n";
+            str += hangingIndent;
+            curLinePos = indentLen + wordLen + 1;
+         }
+         else
+            curLinePos += wordLen + 1;
+         str += word;
+         str += " "; 
+      curOrigPos = spacePos + 1;
+      }
+      else
+      {
+         str += origStr.substr(curOrigPos, origLen - curOrigPos);
+         str += "\n";
+         break;
+      }
+   }
+
+   return str;
 }
 
 

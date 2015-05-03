@@ -5,7 +5,9 @@ This is the Spew FAQ.  Any suggestions/corrections/etc should be
 directed to andrew.patterson@hp.com.  The FAQ answers the following questions:
 
     1) How do I get direct I/O working on RedHat Advanced Server 2.1?
-    2) Who came up with the names "Spew" and "Snarf"?
+    2) Who came up with the names "Spew"?
+    3) How do I by-pass the buffer or disk cache to find the true 
+       performance of a device?
 
 
  1) How do I get direct I/O working on RedHat Advanced Server 2.1?
@@ -25,7 +27,25 @@ directed to andrew.patterson@hp.com.  The FAQ answers the following questions:
  
  struct file_operations def_blk_fops = {
 
-  2) Who came up with the names "Spew" and "Snarf"?
+  2) Who came up with the name "Spew"?
 
      Larry Fenske was the author of the original 20-line C version of Spew. 
-     He also originated the names.  
+     He also originated the name.  
+
+  3) How do I by-pass the buffer or disk cache to find the true performance 
+     of a device?
+
+     You can use the -s|--synchronous option for writes.  This adds
+     the O_SYNC option when the file is opened.  All writes will then
+     block until flushed to disk (Note that your device itself may
+     still cache).
+
+     Reads are a little more complicated.  The O_SYNC option is
+     ignored for reads.  On Linux, you can use spew's -d|--direct
+     option which will bypass the buffer cache for both reads and
+     writes.  It will also disable read-ahead for reads.  On other
+     operating systems (like HP-UX) or old versions of Linux (kernels
+     before 2.4.21 or so), you may have to use a special device
+     file. On old versions of Linux, you would use raw device files
+     (see raw(8)).  On HP-UX, you would use the the /dev/rdsk/* device
+     files.  I have no idea what to use on Windows.

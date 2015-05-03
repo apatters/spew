@@ -63,8 +63,10 @@ public:
                                      const TimeHack& jobTransferTime,
                                      capacity_t totalBytesRead,
                                      const TimeHack& totalReadTransferTime,
+                                     capacity_t totalReadOps,
                                      capacity_t totalBytesWritten,
                                      const TimeHack& totalWriteTransferTime,
+                                     capacity_t totalWriteOps,
                                      const TimeHack& totalRunTime);
    virtual void startRun() {};
    virtual void endRun() {};

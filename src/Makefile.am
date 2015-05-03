@@ -40,5 +40,5 @@ spew_SOURCES = spew.cpp \
 spew_LDFLAGS = $(STATIC_LINK)
 
 install-exec-local:
-	(cd $(bindir) && $(LN_S) -f spew snarf)
-	(cd $(bindir) && $(LN_S) -f spew regorge)
+	(cd $(DESTDIR)$(bindir) && $(LN_S) -f spew gorge)
+	(cd $(DESTDIR)$(bindir) && $(LN_S) -f spew regorge)

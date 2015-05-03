@@ -211,8 +211,10 @@ void SpewConsole::cumulativeStatistics(capacity_t jobBytesTransferred,
                                        const TimeHack& jobTransferTime,
                                        capacity_t totalBytesRead,
                                        const TimeHack& totalReadTransferTime,
+                                       capacity_t totalReadOps,
                                        capacity_t totalBytesWritten,
                                        const TimeHack& totalWriteTransferTime,
+                                       capacity_t totalWriteOps,
                                        const TimeHack& totalRunTime)
 {
    if (mVerbosity == VERBOSITY_NONE)
@@ -222,22 +224,24 @@ void SpewConsole::cumulativeStatistics(capacity_t jobBytesTransferred,
 
    if (mIterationsToDo != 1)
    {
-      printf("Iteration: %27d    Total runtime: %s\n",
+      printf("Itereration: %8d    Total runtime: %s\n",
              mCurrentIteration, totalRunTime.getElapsedTimeStr().c_str());     
    }
    switch (mCurrentIoDirection)
    {
    case READING:
-   printf("Read transfer rate:  %11.2Lf %-5s    Transfer time: %s\n",
-          transferRate, 
-          getTransferRateUnitsStr(mCurrentUnits), 
-          jobTransferTime.getElapsedTimeStr().c_str());  
+      printf("RTR: %11.2Lf %-5s   Tranfser time: %s    IOPS: %11.2Lf\n",
+             transferRate, 
+             getTransferRateUnitsStr(mCurrentUnits), 
+             jobTransferTime.getElapsedTimeStr().c_str(),
+             (long double)totalReadOps/(long double)jobTransferTime.getTime());  
       break;
    case WRITING:
-   printf("Write transfer rate: %11.2Lf %-5s    Transfer time: %s\n",
-          transferRate, 
-          getTransferRateUnitsStr(mCurrentUnits), 
-          jobTransferTime.getElapsedTimeStr().c_str());  
+      printf("WTR: %11.2Lf %-5s   Transfer time: %s    IOPS: %11.2Lf\n",
+             transferRate, 
+             getTransferRateUnitsStr(mCurrentUnits), 
+             jobTransferTime.getElapsedTimeStr().c_str(),
+             (long double)totalWriteOps/(long double)jobTransferTime.getTime());  
       break;
    }
    fflush(stdout);

@@ -41,8 +41,8 @@ case $arch in
     hpux11-parisc64)
       MAKE=gmake
       TAR=/usr/local/bin/tar
-      ldflags=-lpthread 
-      cxxflags=-I/usr/local/include/ncurses
+      ldflags="-L/home/andrew/popt-1.7/.libs -lpthread" 
+      cxxflags="-I/home/andrew/popt-1.7 -I/usr/local/include/ncurses"
       ;;
     *)
       echo "error: unknown architecture -- use one of linux-ia32, linux-ia64, linux-parisc, winnt, hpux11" >&2

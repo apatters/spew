@@ -1,3 +1,21 @@
+Changes since 1.0.3
+
+* Renamed the executable "snarf" to "gorge" to prevent a naming conflict with 
+  the Snarf project (http://www.xach.com/snarf/).
+
+* Fixed various Debian packaging problems.
+
+* Command-line options can now be put in rcfiles.
+  Added an --rc-file option to specify a rcfile on the command-line.
+  Added an --no-rcfiles option to prevent the reading of standard rcfiles.
+
+* I/O's per second (IOPS) statistics are now output to the console and
+  to the logfile. 
+
+* Issue better error messages when command-line options are used incorrectly.
+
+* Fixed static builds for HP-UX 11.
+
 Changes since 1.0.2
 
 * Changed license from Hewlett-Packard proprietary to GPL.  Kudos to 
