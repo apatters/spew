@@ -1,3 +1,11 @@
+Changes since 1.0.7
+
+* Fixed a build issue with Debian. The basename function is available on
+  new releases.
+
+* Fixed a problem with with reusing the same random seed for every 
+  iteration.  New seed is now used for every iteration.
+
 Changes since 1.0.6
 
 * Fixed a bug where the IOPS counter was not being reset between iterations 
