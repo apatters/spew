@@ -1,21 +1,22 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.57)
-AC_INIT(src/spew.cpp)
-AC_CONFIG_AUX_DIR(config)
-AM_CONFIG_HEADER(config.h)
-AM_MAINTAINER_MODE
-
 SPEW_AGE=1
 SPEW_REVISION=0
-SPEW_CURRENT=8
+SPEW_CURRENT=9
 AC_SUBST(SPEW_AGE)
 AC_SUBST(SPEW_REVISION)
 AC_SUBST(SPEW_CURRENT)
 VERSION=$SPEW_AGE.$SPEW_REVISION.$SPEW_CURRENT
 
-AM_INIT_AUTOMAKE(spew, $VERSION)
+AC_PREREQ(2.57)
+AC_INIT(spew, 1.0.9)
+AC_CONFIG_SRCDIR([src/spew.cpp])
+AC_CONFIG_AUX_DIR(config)
+AM_CONFIG_HEADER(config.h)
+AM_MAINTAINER_MODE
+
+AM_INIT_AUTOMAKE
 
 # Checks for programs.
 AC_PROG_CXX
