@@ -270,23 +270,20 @@ void help(poptContext &context)
 "                                    tebibytes(t), or terabytes(T).\n"
       "";
 
-   char outStr[4096];
-   snprintf(outStr, sizeof(outStr) - 1, fmtStr,
-            Transfer::BUFFER_SIZE_INCREMENT,
-            Transfer::BUFFER_SIZE_INCREMENT,
-            Transfer::BUFFER_SIZE_INCREMENT,
-            Transfer::OFFSET_INCREMENT,
-            PATTERN_LOOKUP[Job::PATTERN_NONE],
-            PATTERN_LOOKUP[Job::PATTERN_ZEROS],
-            PATTERN_LOOKUP[Job::PATTERN_ONES],
-            PATTERN_LOOKUP[Job::PATTERN_ALTERNATING],
-            PATTERN_LOOKUP[Job::PATTERN_RANDOM],
-            PATTERN_LOOKUP[Job::PATTERN_TRANSFER_NUMBERS],
-            PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
-            PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
-            PATTERN_LOOKUP[DEFAULT_PATTERN]);
-   fprintf(stdout, outStr);
-
+   fprintf(stdout, fmtStr,
+           Transfer::BUFFER_SIZE_INCREMENT,
+           Transfer::BUFFER_SIZE_INCREMENT,
+           Transfer::BUFFER_SIZE_INCREMENT,
+           Transfer::OFFSET_INCREMENT,
+           PATTERN_LOOKUP[Job::PATTERN_NONE],
+           PATTERN_LOOKUP[Job::PATTERN_ZEROS],
+           PATTERN_LOOKUP[Job::PATTERN_ONES],
+           PATTERN_LOOKUP[Job::PATTERN_ALTERNATING],
+           PATTERN_LOOKUP[Job::PATTERN_RANDOM],
+           PATTERN_LOOKUP[Job::PATTERN_TRANSFER_NUMBERS],
+           PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
+           PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
+           PATTERN_LOOKUP[DEFAULT_PATTERN]);
    fprintf(stdout, "\nReport bugs to Andrew Patterson <andrew.patterson@hp.com>.\n");
 }
 

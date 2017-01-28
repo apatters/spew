@@ -278,7 +278,7 @@ void SpewTuiStatisticsWindow::updateTotalRunTime()
              "");
    if (mSpewTui->getCurrentIteration() > 0)
    {
-      int len = snprintf(NULL, 0, (char *)mTotalRunTime.getElapsedTimeStr().c_str());
+      int len = snprintf(NULL, 0, "%s", (char *)mTotalRunTime.getElapsedTimeStr().c_str());
       mvwprintw(mWindow, 
                 RUNTIME_FIELD_STARTY, 
                 RUNTIME_FIELD_STARTX + RUNTIME_FIELD_WIDTH - len,
