@@ -1,6 +1,6 @@
-# Spew
+# Spew -- a load generating tool
 
-The spew package is used to test I/O performance and to generate load
+The spew program is used to test I/O performance and to generate load
 on character devices, block devices, and file systems.  It is similar
 to the lmdd program found in the lmbench test-suite
 (http://www.bitmover.com/lmbench). It is a bit easier to use than lmdd
@@ -33,7 +33,7 @@ $ spew --pattern=random --min-buffer-size=64k 1g /tmp/bigfile
 Write transfer rate:    46677.47 KiB/s    Transfer time: 00:00:22
 ```
 
-## Spew progress option.
+## Spew progress option
 
 You can use the --progress option to display a "progress-meter" that
 also shows intermediate transfer rates:
@@ -78,6 +78,35 @@ r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r 100%   176579.31 KiB/s
 Read transfer rate:     35313.10 KiB/s    Transfer time: 00:00:29
 ```
 
-Spew has lots of different options.  Consult the man-page for more
+## Spew Terminal User Interface (TUI)
+
+Spew has a terminal user interface that lets you observe its operation
+without the need for scrolling. It is especially useful when running
+spew with the -i|--iterations option. Here is a screen shot of the
+spew TUI in operation:
+
+![Spew TUI](docs/images/spew-tui.png)
+
+## Spew -g|--generate--load option
+
+Spew has the -g|--generate load option that combines many commonly used
+options together. The command-line syntax then becomes much simpler, eg.,
+
+```
+$ spew --raw -g -b 64k 1g /dev/sdb
+```
+
+Consult the man-page for details.
+
+
+## Spew configuration files
+
+You can place command-line defaults in one of three locations,
+`/etc/spew.conf`, `$HOME/.spewrc`, or where the environment variable
+`$SPEWRC` points.
+
+## Other command-line options
+
+Spew has a lot of different options.  Consult the man-page for more
 information.
 
