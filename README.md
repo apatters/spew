@@ -78,7 +78,7 @@ r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r-r 100%   176579.31 KiB/s
 Read transfer rate:     35313.10 KiB/s    Transfer time: 00:00:29
 ```
 
-## Spew Terminal User Interface (TUI)
+## Terminal User Interface (TUI)
 
 Spew has a terminal user interface that lets you observe its operation
 without the need for scrolling. It is especially useful when running
@@ -87,7 +87,7 @@ spew TUI in operation:
 
 ![Spew TUI](docs/images/spew-tui.png)
 
-## Spew -g|--generate--load option
+## The -g|--generate--load option
 
 Spew has the -g|--generate load option that combines many commonly used
 options together. The command-line syntax then becomes much simpler, eg.,
@@ -98,8 +98,70 @@ $ spew --raw -g -b 64k 1g /dev/sdb
 
 Consult the man-page for details.
 
+## Examples
 
-## Spew configuration files
+```
+$ spew --write -b 16k 1m /tmp/bigfile
+```
+
+Writes 1 mebibyte (1 mebibyte = 1024*1024 bytes) using 16 kibibytes (1
+kibibyte = 1024 bytes) requests to the file /tmp/bigfile using the
+default pattern (random).  Displays the write transfer rate in
+kibibytes per second and the write transfer time in seconds.
+
+```
+$ spew --write -u m -i 10 -b 1k 256k /dev/sda1
+```
+
+Writes 256 kibibytes using 1 kibibyte requests to the block device
+file /dev/sda1 10 times using the default pattern (random).  The
+iteration and cumulative write transfer rates are displayed in
+mebibytes per sec‐ ond and the iteration and cumulative write transfer
+times are displayed in seconds.
+
+```
+$ spew --raw -d -o 1m -b 16m 1g /tmp/bigfile
+```
+
+Write 1 gibibyte (1 gibibyte = 1024*1024*1024 bytes) starting at an
+offset of 1 mebibyte using 16 mebibyte requests to the file
+/tmp/bigfile using the default pattern (random).  The data is written
+synchronously and flushed at file close.  Then read in the same data
+using the same request size and offset.  The data is checked to ensure
+that the data read in matches the data read out.  Write and read
+transfer rates are displayed in kibibytes/second.  Read and write
+transfer times are displayed in seconds.
+
+```
+$ spew --read -i 0 -u M -p zeros -b 512 1m /dev/zero
+```
+
+Read 1 mebibyte of data using 512 byte requests from the file
+/dev/zero an infinite number of times using the zeros pattern (don't
+check the data).  The iteration and cumulative read transfer rates are
+displayed in megabytes (1 megabyte = 1,000,000 bytes) per second and
+the iteration and cumulative read transfer times are displayed in
+seconds.
+
+```
+$ spew --raw -g -r -b 1k -B 256K 1t /dev/md1
+```
+
+Write 1 tebibyte (1 tebibyte = 1024*1024*1024*1024 bytes) using 1-256
+kibibyte requests to the block device /dev/md1 using the random pat‐
+tern.  Random seeks are performed before each transfer, but each block
+between the start and end of the data is written exactly once.  The
+request sizes are chosen randomly.  Then read in the same data using
+the same request sizes and seeks in the same sequence.  Repeat the
+above sequence an infinite number of times until told to quit (via
+signal or TUI command).
+
+The data is checked to ensure that the data read in matches the data
+read out.  A curses-based TUI is used to display iteration and
+cumulative transfer rates, transfer times, and bytes transferred.
+Display verbose statistics after quitting.
+
+## Configuration files
 
 You can place command-line defaults in one of three locations,
 `/etc/spew.conf`, `$HOME/.spewrc`, or where the environment variable
