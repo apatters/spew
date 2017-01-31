@@ -1,11 +1,14 @@
 Spew AUTHORS (and CONTRIBUTORS)
- 
-Andrew Patterson <andrew.patterson@hp.com> 
+
+Andrew Patterson <andrew.patterson@hpe.com>
   - Creator/maintainer.
 
-Larry Fenske 
+Larry Fenske
   - Coined the name "spew".
   - Wrote the original 20-line implementation.
 
-Paul Whyman 
+Paul Whyman
   -- Web consulting and spew logo.
+
+Matt Taggart
+  -- Debian packaging.

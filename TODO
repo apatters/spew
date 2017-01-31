@@ -2,10 +2,11 @@ Documentation:
 
 - Finish man pages
 - HTML manual
-- ChangeLog
 
 Bugs:
 
-- Fix building windows man-pages.
+Features:
 
-
+- Support multiple devices.
+- Detect end-of-data instead of specifying size.
+- GUI

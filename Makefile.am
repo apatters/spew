@@ -7,6 +7,6 @@ EXTRA_DIST = config/config.guess \
              config/missing \
              config/mkinstalldirs \
              FAQ \
-	     TODO \
+             TODO \
              etc/spew.conf
 

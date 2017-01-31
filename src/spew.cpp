@@ -195,7 +195,7 @@ void version()
 {
    note("%s %s\n", CANONICAL_PROG_NAME, PROG_VERSION);
    note("Copyright 2007 Hewlett-Packard Corp.\n");
-   note("Written by Andrew Patterson <andrew.patterson@hp.com>\n");
+   note("Written by Andrew Patterson <andrew.patterson@hpe.com>\n");
 }
 
 
@@ -284,7 +284,7 @@ void help(poptContext &context)
            PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
            PATTERN_LOOKUP[Job::PATTERN_USER_DEFINED],
            PATTERN_LOOKUP[DEFAULT_PATTERN]);
-   fprintf(stdout, "\nReport bugs to Andrew Patterson <andrew.patterson@hp.com>.\n");
+   fprintf(stdout, "\nReport bugs to Andrew Patterson <andrew.patterson@hpe.com>.\n");
 }
 
 

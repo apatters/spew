@@ -1,0 +1,6 @@
+spew 1.0.8 - spew 1.0.9
+
+  * Updated README/README.md files.
+  * Fixed -Wformat-security warnings.
+  * Cleaned up and modernized autoconf/automake.
+
